@@ -1,0 +1,1569 @@
+\chapter{Learning in Multiagent Systems}
+\label{cha:learn-mult-syst}
+
+
+% Shoham has a good unpublished survey article on reinforcement
+% learning. Covers nashq, library/Critical.....
+
+Machine learning algorithms have achieved impressive results. We can
+write software that processes larger amounts of data than any human
+can and which can learn to find patterns that escape even the best
+experts in the field. As such, it is only reasonable that at some
+point we will want to add learning agents to our multiagent system.
+There are several scenarios in which one might want to add these
+learning agents.
+
+Many multiagent systems have as their goal the exploration or
+monitoring of a given space, where each agent has only a local view of
+its own area. In these scenarios we can envision that each agent
+learns a map of its world and the agents further share their maps in
+order to aggregate a global view of the field and cooperatively decide
+which areas need further exploration. This is a form of cooperative
+learning.
+
+Another scenario is in competitive environments each selfish agent
+tries to maximize its own utility by learning the other agents'
+behaviors and weaknesses. In these environments we are interested in
+the dynamics of the system and in determining if the agents will reach
+a stable equilibrium. At their simplest these scenarios are repeated
+games with learning agents.
+
+To summarize, agents might learn because they don't know everything
+about their environment or because they don't know how the other
+agents behave. Furthermore, the learning can happen in a cooperative
+environment where we also want the agents to share their learned
+knowledge, or in a competitive environment where we want them to best
+each other. We present analysis and algorithms for learning agents in
+these various environment.
+
+\section{The Machine Learning Problem}
+\label{sec:machine-learning}
+
+Before delving into multiagent learning we first present a high level
+view of what we mean by \td{machine learning}. The word ``learning''
+as used casually can have many different meanings, from remembering to
+deduction, but machine learning researchers have a very specific
+definition of the machine learning problem.
+
+
+The goal of machine learning research is the development of algorithms
+that increase the ability of an agent to match a set of inputs to
+their corresponding outputs \cite{mitchell97a}. That is, we assume the
+existence of a large set of examples $E$. Each example $e \in E$ is a
+pair $e = \{a, b\}$ where $a \in A$ represents the input the agent
+receives and $b \in B$ is the output the agent should produce when
+receiving this input. The agent must find a function $f$ which maps $A
+\rightarrow B$ for as many examples of $A$ as possible. For example,
+$A$ could be a set of photo portraits, $B$ could be the set
+$\{\text{male}, \text{female}\}$, and each element $e$ tells the
+program if a particular photo is of a man or of a woman. The machine
+learning algorithm would have to learn to differentiate between a
+photo of a man and that of a woman.
+
+\begin{SCfigure}
+  \begin{minipage}{1.0\linewidth}
+  \begin{center}
+    \begin{tikzpicture}[style=dstyle]
+      \draw[->] (0,0) -- node[below] {Weight} (4.5,0);
+      \draw[->] (0,0) -- node[sloped,above] {Speed} (0,4.5);
+      \draw (1,1) node (a) {$+$};
+      \draw (.2,3.1) node (b) {$+$};
+      \draw (1.2,2.3) node (c) {$+$};
+      \draw (1.4,.5) node (d) {$+$};
+      \draw (2.2,3.7) node {$+$};
+      \draw (.2,.3) node {$+$};
+      \draw (3.7,.6) node {$+$};
+      \draw (2.8,.1) node {$+$};
+      \draw (.4,1.9) node {$+$};
+      \draw (3,1.9) node (e) {$-$};
+      \draw (2.4,2.7) node (f) {$-$};
+      \draw (2.7,2.9) node (g) {$-$};
+      \draw (3.3,1.1) node (h) {$-$};
+      \draw (3.1,1) node (i) {$-$};
+      \draw (2.5,2.4) node (j) {$-$};
+      \draw (3.6,1.9) node (k) {$-$};
+      \draw[rounded corners=8pt,line width=.1pt]
+      (2,.2) -- (3,.3) -- (4,1.2) -- (4,4) -- (2,3.5) -- cycle;
+      \draw[rounded corners=8pt,line width=.1pt]
+      (1.3,1) -- (3,.3) -- (4.5,2.2) -- (3.5,3.2) -- (3,3.5) --
+      (1.5,3) -- cycle;
+      \draw[rounded corners=4pt,line width=.1pt]
+       (2.1,2.9) -- (2.8,3.1) -- node[above,black] {$f_3$} (3.8,1.9) --
+       (3.3,.7) -- (3,.7)-- cycle;
+       \draw (4.2,3.4) node {$f_1$};
+       \draw (4.6,2.2) node {$f_2$};
+%      \draw[->] (a) -- +(0,.5);
+%      \draw[->] (b) -- +(.5,.5);
+%      \draw[->] (c) -- +(0,.5);
+%      \draw[->] (d) -- +(.5,.5);
+%      \draw[->] (e) -- +(0,.5);
+%      \draw[->] (f) -- +(-.5,-.5);
+%      \draw[->] (g) -- +(0,.5);
+%      \draw[->] (h) -- +(.5,.5);
+    \end{tikzpicture}
+  \end{center}
+  \end{minipage}
+  \caption{The machine learning problem. The input set $A$ corresponds
+    to the two axis: Weight and Speed. The outputs $B$ are the set
+    $\{+,-\}$. The lines represent three possible functions $f$ which,
+    in this case, map anything within the lines as a $-$ and anything
+    outside as a $+$. Note that all functions have correctly solved
+    the learning problem but in different ways.}
+  \label{fig:mlp}
+\end{SCfigure}
+
+
+In a controlled test the set $E$ is usually first divided into a
+\idx{training set} which is used for training the agent, and a
+\idx{testing set} which is used for testing the performance of the
+agent. However, in some scenarios it is impossible to first train the
+agent and then test it. In these cases the training and testing
+examples are interleaved. The agent's performance is assessed on an
+ongoing manner.
+
+Figure~\ref{fig:mlp} shows a graphical representation of the machine
+learning problem. The learning problem is coming up with a function
+that maps all the points in the space to either $+$ or $-$ such that
+it will also correctly categorize any new examples that we have not
+seen. Our function must, therefore, extrapolate from the examples it
+has seen and generalize to all possible instances. That is, machine
+learning performs \td{induction} over the set of examples it has seen
+in order to categorize all future examples.
+
+Figure~\ref{fig:mlp} shows three different functions, $f_1$, $f_2$,
+and $f_3$, each one of which correctly solves the learning problem.
+That is, they are all correct inductions since they correctly
+categorize all the examples. In fact, there are an infinite number of
+such functions. One might wonder which one is the best one to use. We
+don't have a general answer to that question. Each learning algorithm,
+from reinforcement learning to support vector machines, arrives at one
+learned function but the choice is arbitrary. That is, given the same
+examples two learning algorithms can learn to perfectly classify them
+but still have learned different functions. This effect is known as
+the \td{induction bias} of a learning algorithm. It is because of this
+induction bias that some learning algorithms appear to perform better
+than others in certain domains---their bias coincides with the
+implicit structure of the problem. However, we know that in general,
+that is, averages over all possible learning problems there is no
+learning algorithm that outperforms all others, a fact that has been
+formalized by the \td{no free lunch theorem} \cite{wolpert95a}. Still,
+in practice we, as designers, do know a lot about any specific problem
+to be learned. You should always try to integrate this knowledge into
+the learning algorithm you are using.
+
+\medskip
+
+When a learning agent is placed in a multiagent scenario some of the
+fundamental assumptions of machine learning are violated. The agent is
+no longer learning to extrapolate from the examples it has seen of
+fixed set $E$, instead it's target concept keeps changing (the points
+in figure~\ref{fig:mlp} keep moving), leading to a \td{moving target
+  function} problem \cite{vidal:98a}. In general, however, the target
+concept does not change randomly; it changes based on the learning
+dynamics of the other agents in the system. Since these agents also
+learn using machine learning algorithms we are left with some hope
+that we might someday be able to understand the complex dynamics of
+these type of systems.
+
+Learning agents are most often selfish utility maximizers. These
+agents often face each other in encounters where the simultaneous
+actions of a set of agents leads to different utility payoffs for all
+the participants. For example, in a market-based setting a set of
+agents might submit their bids to a first-price sealed-bid auction.
+The outcome of this auction will result in a utility gain or loss for
+all the agents. In a robotic setting two agents headed in a collision
+course towards each other have to decide whether to stay the course or
+to swerve. The results of their combined actions have direct results
+in the utilities the agents receive from their actions. However, even
+agents that are trying to learn for themselves might find utility in
+sharing this knowledge.
+
+
+
+\section{Cooperative Learning}
+\label{sec:cooperative-learning}
+
+Imagine two robots equipped with wireless communication capabilities
+and trying to map an unknown environment. One of the robots could
+learn that the red rocks can be moved but the black rocks are too
+heavy to move. The robot could communicate this information to the
+other one so that it does not have to re-learn it. Similarly, once one
+robot has built a map of one area it could send this map to the other
+robot. Of course, this scenario assumes that the two robots are
+cooperating with each other in order to build the map.
+
+This type of problem is easy to solve when the robots are identical.
+In this case they can simply tell each other everything that they
+learn knowing that it will be equally applicable to the other one. One
+challenge is trying to prevent the robots from telling each other
+things the other already knows. The problem gets much harder when the
+robots are heterogeneous. For example, one robot might have learned
+that the black rocks can be moved using its large arm but the other
+robot might not have an arm that large so this knowledge is useless to
+him. To solve this problem we need to somehow model the agents'
+capabilities so as to allow one agent to determine which parts of his
+learned knowledge will be useful to an agent with a different set of
+capabilities. To date, there is scant research on general approaches
+to the problem of sharing learned knowledge. Most systems that share
+learned knowledge among agents, such as \cite{stone00a}, simply assume
+that all agents have the same capabilities.
+
+
+\section{Repeated Games}
+\label{sec:learning-repeated-games}
+
+We now focus on the problem of learning in \td{repeated games}
+\cite{fudenberg98a}. In these problems we have two players that face
+each other repeatedly on the same game matrix, like the one shown in
+figure~\ref{fig:gamematrix}, and each one tries to maximize the sum of
+its payoffs over time. You will remember that we already saw a
+specific version of this problem called the iterated prisoner's
+dilemma.
+
+\begin{SCfigure}
+  \begin{minipage}{1.0\linewidth}
+  \begin{center}
+    \renewcommand\arraystretch{1.5}
+    \begin{tabular}{cc|c|c|}
+      &    &\multicolumn{2}{c}{$j$} \\  & &$c$&$d$ \\ \cline{1-4}
+      \multirow{2}{2em}{$i$}
+      & $a$  &0,0 & 5,1 \\ \cline{2-4}
+      & $b$  &-1,6 & 1,5 \\ \cline{2-4}
+    \end{tabular}
+  \end{center}
+  \end{minipage}
+  \caption{Sample two-player game matrix. Agent $i$ chooses from the
+    rows and agent $j$ chooses from the columns.} 
+  \label{fig:gamematrix}
+\end{SCfigure}
+
+
+The theory of learning in games studies the equilibrium concepts
+dictated by various simple learning mechanisms. That is, while the
+Nash equilibrium is based on the assumption of perfectly rational
+players, in learning in games the assumption is that the agents use
+some kind of algorithm. The theory determines the equilibrium strategy
+that will be arrived at by the various learning mechanisms and maps
+these equilibria to the standard solution concepts, if
+possible. Many learning mechanisms have been studied. The most common
+of them are explained in the next few sub-sections.
+
+\subsection{Fictitious Play}
+\label{sec:fictitious-play}
+
+A widely studied model of learning in games is the process of
+\td{fictitious play}. In it agents assume that their opponents are
+playing a fixed strategy. The agents use their past experiences to
+build a model of the opponent's strategy and use this model to choose
+their own action. Given that all agents are using fictitious play we
+try to determine if their learning will converge and, if so, to which
+strategy.
+
+Fictitious play uses a simple form of learning where an agent
+remembers everything the other agents have done and uses this
+information to build a probability distribution for the other agents'
+expected strategy. Formally, for the two agent case we say that agent
+$i$ maintains a weight function $k_i: S_{j} \rightarrow
+\mathcal{R}^+$.  The weight function changes over time as the agent
+learns. The weight function at time $t$ is represented by $k_i^t$. It
+maintains a count of how many times each strategy has been played by
+each other player $j$.  When at time $t-1$ opponent $j$ plays strategy
+$s_j^{t-1}$ then $i$ updates its weight function with
+
+\begin{equation}
+  \label{eq:1}
+  k_i^t(s_j) = k_i^{t-1}(s_j) + 
+  \left\{
+    \begin{array}{ll}
+      1 & \mbox{if $s_j^{t-1} = s_j$,} \\
+      0 & \mbox{if $s_j^{t-1} \neq s_j$.}
+    \end{array}    
+  \right.
+\end{equation}
+
+Using this weight function, agent $i$ can assign a probability to $j$
+playing any of its $s_j \in S_j$ strategies with
+
+\begin{equation}
+  \label{eq:2}
+  \Pro_i^t[s_j] = \frac{k_i^t(s_j)}{\sum_{\tilde{s}_j \in S_j} k_i^t(\tilde{s}_j)}.
+\end{equation}
+
+
+That is, $i$ assumes $j$ will pick its action \td{stochastically}
+given the values in $k_i(s_j)$. Player $i$ then determines the
+strategy that will give it the highest expected utility given that $j$
+will play each of its $s_j \in S_j$ with probability $\Pro_i^t[s_j]$.
+In other words, $i$ determines its best response to a probability
+distribution over $j$'s possible strategies.  In effect, $i$ is
+assuming that $j$'s strategy at each time is taken from some fixed but
+unknown probability distribution.
+
+\begin{SCfigure}
+  \begin{minipage}{1.0\linewidth}
+  \begin{center}
+    \renewcommand\arraystretch{1.5}
+    \begin{tabular}{cc|c|c|}
+      &    &\multicolumn{2}{c}{$j$} \\  &  &$c$&$d$ \\ \cline{1-4}
+      \multirow{2}{1em}{$i$}
+      & $a$  &0,0 & 1,2 \\ \cline{2-4}
+      & $b$  &1,2 & 0,0 \\ \cline{2-4}
+    \end{tabular}
+    \hspace{2em}
+    \begin{tabular}{ll!{\vrule}cccc}
+      $s_i$ & $s_j$ & $k_i(c)$ & $k_i(d)$ & $\Pr_i[c]$ & $\Pr_i[d]$ \\\hline
+      $a$  & $c$  & 1 & 0 & 1 & 0 \\
+      $b$  & $d$  & 1 & 1 & .5 & .5 \\
+      $a$  & $d$  & 1 & 2 & $1/3$ & $2/3$ \\
+      $a$  & $d$  & 1 & 3 & $1/4$ & $3/4$ \\
+      $a$  & $d$  & 1 & 4 & $1/5$ & $4/5$ 
+    \end{tabular}
+  \end{center}
+  \end{minipage}
+  \caption{Example of fictitious play. The matrix is shown above and
+    the values at successive times, each on a different row, are
+    shown on the table below. The first row corresponds to time
+    0. Note that only $i$ is using fictitious play, $j$ plays the
+    values as in the $s_j$ column. $i$'s first two actions are
+    stochastically chosen.}
+  \label{fig:exbr}
+\end{SCfigure}
+
+An example of the best response dynamic at work is shown in
+figure~\ref{fig:exbr}. Here we see the values for agent $i$ and its
+best responses to agent $j$'s action. Note that in this example agent
+$j$ is not using best response. Agent $i$ first notices that $j$
+played $c$ and thus sets $k_i^1(c) = 1$. It therefore predicts that
+$j$ will play $c$ with probability 1 so its best response at time 2 is
+to play $b$, as seen in the second row. Agent $j$ then plays $d$ which
+makes $i$ have $\Pro_i^1[c] = \Pro_i^1[d] = .5$. Both of $i$'s actions
+have the same expected payoff (1) so it randomly chooses to play $b$.
+After that, when $j$ plays $d$ again then $i$'s best response is
+unequivocally $b$.
+
+Several interesting results have been derived by research in repeated
+games. These results assume that all players are using fictitious
+play. For example, we know that the Nash equilibrium remains a
+powerful attractor.
+
+\begin{theorem}[Nash Equilibrium is Attractor to Fictitious Play] If
+  $s$ is a strict Nash equilibrium and it is played at time $t$ then
+  it will be played at all times greater than $t$ \cite{fudenberg90a}.
+\end{theorem}
+
+
+Intuitively, we can see that if the fictitious play algorithm leads
+all players to play the same Nash equilibrium then, afterward, they
+will all increase the probability that all others are playing the
+equilibrium because they just saw them play it. Since, by definition,
+the best response of a player when everyone else is playing a strict
+Nash equilibrium is to play the same equilibrium, then all players
+will play the same strategy and the next time. The same holds true for
+every time after that. More importantly, Nash is also where we will
+converge to.
+
+\begin{theorem}[Fictitious Play Converges to Nash] If fictitious play
+  converges to a pure strategy then that strategy must be a Nash
+  equilibrium \cite{fudenberg90a}.
+\end{theorem}
+
+
+We can show this by contradiction. If fictitious play converges to a
+strategy that is not a Nash equilibrium then this means that the best
+response for at least one of the players is not the same as the
+convergent strategy. Therefore, that player will take that action at
+the next time, taking the system away from the strategy profile it was
+supposed to have converged to.
+
+\begin{SCfigure}
+  \begin{minipage}{1.0\linewidth}
+  \begin{center}
+    \renewcommand\arraystretch{1.5}
+    \begin{tabular}{cc|c|c|}
+      &    &\multicolumn{2}{c}{$j$} \\ 
+      &      &$c$&$d$ \\ \cline{1-4}
+      \multirow{2}{1em}{$i$}
+      & $a$  &0,0 & 1,1 \\ \cline{2-4}
+      & $b$  &1,1 & 0,0 \\ \cline{2-4}
+    \end{tabular}
+    \hspace{2em}
+    \begin{tabular}{ll!{\vrule}cccc}
+      $s_i$ & $s_j$ & $k_i(c)$ & $k_i(d)$ & $k_j(a)$ & $k_j(b)$ \\\hline
+      &   & 1 & 1.5 & 1 & 1.5 \\
+      $a$  & $c$  & 2 & 1.5 & 2 & 1.5 \\
+      $b$  & $d$  & 2 & 2.5 & 2 & 2.5 \\
+      $a$  & $c$  & 3 & 2.5 & 3 & 2.5 \\
+      $b$  & $d$  & 3 & 3.5 & 3 & 3.5 
+    \end{tabular}
+  \end{center}
+  \end{minipage}
+  \caption{A game matrix with an infinite cycle.}
+  \label{fig:cycle}
+\end{SCfigure}
+
+An obvious problem with the solutions provided by fictitious play can
+be seen in the existence of infinite cycles of actions. An example is
+illustrated by the game matrix in figure~\ref{fig:cycle}. If the
+players start with initial weights of $k_i^1(c)=1$, $k_i^1(d)= 1.5$,
+$k_j^1(a)=1$, and $k_j^1(b)= 1.5$ they will both believe that the
+other will play $b$ or $d$ and will, therefore, play $a$ or $c$
+respectively. The weights will then be updated to $k_i^2(c)=2$,
+$k_i^2(d)= 1.5$, $k_j^2(a)=2$, and $k_j^2(b)= 1.5$. Next time, both
+agents will believe that the other will play $a$ or $c$ so both will
+play $b$ or $d$. The agents will engage in an endless cycle where they
+alternatively play $(a,c)$ and $(b,d)$.  The agents end up receiving
+the worst possible payoff.
+
+This example illustrates the type of problems we encounter when adding
+learning to multiagent systems. Most learning algorithms can easily
+fall into cycles such as this one.  One common strategy for avoiding
+this problem is the use of randomness.  Agents will sometimes take a
+random action in an effort to exit possible loops and to explore the
+search space. It is interesting to note that, as in the example from
+figure~\ref{fig:cycle}, it is often the case that the loops the agents
+fall in often reflect one of the mixed strategy Nash equilibria for
+the game. That is, $(.5,.5)$ is a Nash equilibrium for this game.
+Unfortunately, if the agents are synchronized, as in this case, the
+implementation of a mixed strategy could lead to a lower payoff.
+
+Games with more than two players require that we decide whether the
+agent should learn individual models of each of the other agents
+independently or a joint probability distribution over their combined
+strategies.  Individual models assume that each agent operates
+independently while the joint distributions capture the possibility
+that the others agents' strategies are correlated. Unfortunately, for
+any interesting system the set of all possible strategy profiles is
+too large to explore---it grows exponentially with the number of
+agents. Therefore, most learning systems assume that all agents
+operate independently so they need to maintain only one model per
+agent.
+
+\subsection{Replicator Dynamics}
+\label{sec:replicator-dynamics}
+
+Another widely studied learning model in repeated games is
+\td{replicator dynamics}.  This model assumes that the fraction of
+agents playing a particular strategy will grow in proportion to how
+well that strategy performs in the population. A homogeneous
+population of agents is assumed. The agents are randomly paired in
+order to play a symmetric game, that is, a game where both agents have
+the same set of possible strategies and receive the same payoffs for
+the same actions. The replicator dynamics model is meant to capture
+situations where agents reproduce in proportion to how well they are
+doing and is inspired by biological evolution. In fact, the field that
+studies these type of solution concepts is known as \td{evolutionary
+  game theory} \cite{weibull97a}.
+
+Formally, we let $\phi^t(s)$ be the number of agents using strategy
+$s$ at time $t$.  We can then define
+\begin{equation}
+  \label{eq:3}
+  \theta^t(s) = \frac{\phi^t(s)}{\sum_{s'\in S}\phi^t(s')}  
+\end{equation}
+to be the fraction of agents playing $s$ at time $t$. The expected
+utility for an agent playing strategy $s$ at time $t$ is defined as
+
+\begin{equation}
+  \label{eq:4}
+  u^t(s) = \sum_{s' \in S} \theta^t(s')u(s,s'),
+\end{equation}
+
+where $u(s,s')$ is the utility than an agent playing $s$ receives
+against an agent playing $s'$. Notice that this expected utility
+assumes that the agents face each other in pairs and choose their
+opponents randomly. In the replicator dynamics the reproduction rate
+for each agent is proportional to how well it did on the previous
+step. Thus, the number of agents playing $s$ at the next time step is
+given by
+
+\begin{equation}
+  \label{eq:5}
+  \phi^{t+1}(s) = \phi^t(s)(1 + u^t(s)).
+\end{equation}
+
+\netlogo{evolutionarygt}Notice that the number of agents playing a
+particular strategy will continue to increase as long as the expected
+utility for that strategy is greater than zero. Only strategies whose
+expected utility is negative will decrease in population. As such, the
+size of a population will constantly fluctuate. However, when studying
+replicator dynamics we ignore the absolute size of the population and
+focus on the fraction of the population playing a particular strategy.
+We are also interested in determining if the system's dynamics will
+converge to some strategy and, if so, which one.
+
+In order to study these systems using the standard solution concepts
+we view the fraction of agents playing each strategy as a mixed
+strategy for the game. Since the game is symmetric we can use that
+strategy as the strategy for both players, so it becomes a strategy
+profile. We say that the system is in a mixed Nash equilibrium if the
+fraction of players playing each pure strategy is the same as the
+probability of the corresponding strategy in the mixed Nash
+equilibrium.  For a pure equilibrium all players must play that
+strategy. For example, if half the agents are playing $a$ and half $b$
+then we can consider this a mixed Nash equilibrium where $a$ and $b$
+are each played with $.5$ probability.
+
+An examination of these systems quickly leads to the conclusion that
+
+\begin{theorem}[Nash equilibrium is a Steady State]
+  Every Nash equilibrium is a steady state for the replicator
+  dynamics \cite{fudenberg98a}.
+\end{theorem}
+
+We can prove this theorem by contradiction. If an agent had a pure
+strategy that would return a higher utility than any other strategy
+then this strategy would be a best response to the Nash equilibrium.
+If this strategy was different from the Nash equilibrium then we would
+have a best response to the equilibrium which is not the equilibrium,
+so the system could not be at a Nash equilibrium.
+
+The reverse has also been shown to be true.
+
+\begin{theorem}[Stable Steady State is a Nash Equilibrium]
+  A \emph{stable steady state} of the replicator dynamics is a Nash
+  equilibrium. A \emph{stable steady state} is one that, after
+  suffering from a small perturbation, is pushed back to the same
+  steady state by the system's dynamics \cite{fudenberg98a} .
+\end{theorem}
+
+These states are necessarily Nash equilibria because if they were not
+then there would exist some particular small perturbation which would
+take the system away from the steady state.  This correspondence was
+further refined to show that
+
+\begin{theorem}[Asymptotically Stable is Trembling-Hand Nash]
+  An asymptotically stable steady state corresponds to a Nash
+  equilibrium that is trembling-hand perfect and isolated. That is,
+  the stable steady states are a refinement on Nash equilibria---only
+  a few Nash equilibria are stable steady states \cite{bomze86a}.
+\end{theorem}
+On the other hand, it is also possible that a replicator
+dynamics system will never converge. In fact, there are many examples
+of simple games with no asymptotically stable steady states.
+
+While replicator dynamics reflect some of the most troublesome aspects
+of learning in multiagent systems some differences are evident. These
+differences are mainly due to the replication assumption. Agents are
+not usually expected to replicate, instead they acquire the strategies
+of others.  For example, in a real multiagent system all the agents
+might choose to play the strategy that performed best in the last
+round instead of choosing their next strategy in proportion to how
+well it did last time. As such, we cannot directly apply the results
+from replicator dynamics to multiagent systems. However, the
+convergence of the systems' dynamics to a Nash equilibrium does
+illustrate the importance of this solution concept as an attractor of
+learning agent's dynamics.
+
+
+% \subsection{Evolutionary Stable Strategies}
+% \label{sec:evol-stable-strat}
+
+Within replicator dynamics we can define a new solution concept
+inspired by the ``survival of the fittest'' idea from evolution. An
+\td{evolutionary stable strategy} (\acro{ess}) is one which, as a
+population, defeats any small number of invading mutants. That is, if
+everyone in the population plays that strategy then there is no way a
+small number of mutants can invade the population and receive greater
+utility than the agents there. More formally, we define it as
+
+\begin{definition}[Evolutionary Stable Strategy] An \acro{ess} is an
+  equilibrium strategy that can overcome the presence of a small
+  number of invaders. That is, if the equilibrium strategy profile is
+  $\omega$ and small number $\epsilon$ of invaders start playing
+  $\omega'$ then ESS states that the existing population should get a
+  higher payoff against the new mixture ($\epsilon\omega' + (1 -
+  \epsilon)\omega$) than the invaders.
+\end{definition}
+
+
+\begin{SCfigure}
+  \begin{minipage}{1.0\linewidth}
+    \begin{center}
+      \begin{tikzpicture}[style=dstyle]
+
+\draw (-2,8.66) node[anchor=north west] {
+    \renewcommand\arraystretch{1.5}
+    \begin{tabular}{cc|c|c|c|}
+      &    &\multicolumn{2}{c}{$j$} \\ 
+      &      &$a$ & $b$ & $c$ \\ 
+      \cline{1-5} \multirow{3}{1em}{$i$}
+      & $a$  &1,1 & 2,0 & 0,2 \\ \cline{2-5}
+      & $b$  &0,2 & 1,1 & 2,0 \\ \cline{2-5}
+      & $c$  &2,0 & 0,2 & 1,1 \\ \cline{2-5}
+    \end{tabular}};
+
+\draw[color=gray] (0,0) -- (10,0) -- (5, 8.66) -- cycle;
+\draw (0,0) node[anchor=south east] {$a$};
+\draw (10,0) node[anchor=south west] {$c$};
+\draw (5,8.66) node[anchor=west] {$b$};
+
+\draw[->] (7,5) -- (7.586751345948128,3.9999999999999996);
+\draw[->] (1,0) -- (0.55,0);
+\draw[->] (4,5) -- (4.436751345948129,5.499999999999999);
+\draw[->] (4,0) -- (2.8,0);
+\draw[->] (5,4) -- (5.259401076758503,3.9999999999999996);
+\draw[->] (6,6) -- (6.4641016151377535,5.3999999999999995);
+\draw[->] (6,0) -- (4.8,0);
+\draw[->] (5,5) -- (5.386751345948129,4.999999999999999);
+\draw[->] (2,2) -- (2.1547005383792515,2.6);
+\draw[->] (8,1) -- (7.7273502691896265,0.7);
+\draw[->] (6,2) -- (5.754700538379252,1.7999999999999998);
+\draw[->] (2,3) -- (2.4820508075688776,3.8999999999999995);
+\draw[->] (8,2) -- (8.154700538379252,1.4000000000000001);
+\draw[->] (5,8) -- (5.168802153517006,7.999999999999999);
+\draw[->] (3,1) -- (2.477350269189626,1.2000000000000002);
+\draw[->] (7,2) -- (6.904700538379251,1.6);
+\draw[->] (6,5) -- (6.436751345948128,4.5);
+\draw[->] (3,0) -- (1.9500000000000002,0);
+\draw[->] (6,3) -- (6.082050807568877,2.6999999999999997);
+\draw[->] (4,2) -- (3.754700538379252,2.2);
+\draw[->] (5,2) -- (4.704700538379251,1.9999999999999998);
+\draw[->] (5,7) -- (5.34145188432738,6.999999999999998);
+\draw[->] (4,6) -- (4.464101615137755,6.6);
+\draw[->] (3,2) -- (2.9047005383792524,2.4000000000000004);
+\draw[->] (3,5) -- (3.586751345948129,6);
+\draw[->] (2,1) -- (1.7273502691896256,1.2999999999999998);
+\draw[->] (4,1) -- (3.3273502691896257,1.1);
+\draw[->] (3,3) -- (3.2320508075688767,3.599999999999999);
+\draw[->] (1,1) -- (1.0773502691896257,1.4);
+\draw[->] (5,1) -- (4.2773502691896255,0.9999999999999999);
+\draw[->] (9,1) -- (9.077350269189628,0.6);
+\draw[->] (2,0) -- (1.2,0);
+\draw[->] (5,0) -- (3.75,0);
+\draw[->] (3,4) -- (3.4594010767585033,4.8);
+\draw[->] (8,0) -- (7.200000000000001,0);
+\draw[->] (7,1) -- (6.477350269189626,0.8);
+\draw[->] (4,3) -- (4.082050807568878,3.3);
+\draw[->] (7,0) -- (5.949999999999999,0);
+\draw[->] (7,3) -- (7.232050807568877,2.3999999999999995);
+\draw[->] (7,4) -- (7.459401076758503,3.2);
+\draw[->] (5,3) -- (5.0320508075688775,2.999999999999999);
+\draw[->] (5,6) -- (5.414101615137755,5.999999999999998);
+\draw[->] (6,1) -- (5.327350269189626,0.8999999999999999);
+\draw[->] (4,4) -- (4.309401076758503,4.3999999999999995);
+\draw[->] (6,4) -- (6.309401076758503,3.5999999999999996);
+\draw[->] (8,3) -- (8.482050807568879,2.099999999999999);
+\draw[->] (9,0) -- (8.55,0);
+      \end{tikzpicture}      
+    \end{center}
+  \end{minipage}
+  \caption{Visualization of the evolution of populations in replicator
+  dynamics. The game is shown in the top left.}
+  \label{fig:evolutionviz}
+\end{SCfigure}
+
+It has further been shown that
+
+\begin{theorem}[\acro{ess} is Steady State of Replicator Dynamics]
+  \acro{ess} is an asymptotically stable steady state of the
+  replicator dynamics. However, the converse need not be true---a
+  stable state in the replicator dynamics does not need to be an
+  \acro{ess} \cite{taylor78a}.
+\end{theorem}  
+
+This means that \acro{ess} is a further refinement of the solution
+concept provided by the replicator dynamics. \acro{ess} can be used
+when we need a very stable equilibrium concept.
+
+\medskip
+
+While these convergence theorems are very usefull, it is also the case
+that most systems never converge to a fixed point. In these cases we
+need a way to visualize the system dynamics. Since replicator dynamics
+is deterministic---we know exactly how each population will
+evolve---we can plot a map showing how the population will vary over
+time. Figure~\ref{fig:evolutionviz} shows a sample game, at the top
+left, and its visualization. The triangle is known as a \td{simplex
+  plot} and is used for games with three actions. Every point inside
+the triangle represents a possible population. The point at the bottom
+left is the population where all agents play $a$. Similarly, the top
+point is where all agents play $b$. The point in the exact middle of
+the triangle represents the population where $1/3$ of the population
+play $a$, $1/3$ play $b$, and $1/3$ play $c$. Each arrow starts at
+some population and ends at the next population that would evolve from
+that one at the next time step. As can be seen, in this specific game
+the population can get into cycles and never converge to a fixed
+point.
+
+\subsection{The AWESOME Algorithm}
+\label{sec:awesome-algorithm}
+
+While fictitious play and replicator dynamics do not always converge
+to an equilibrium, one way we can guarantee that agents will converge
+to an equilibrium is by having them calculate and play the same
+equilibrium strategy upon starting.  Then, if an agent notices that
+the others are not playing the agreed upon equilibrium strategy it can
+play fictitious play instead. This is the basic idea of the
+\td{AWESOME} (Adapt When Everyone is Stationary, Otherwise Move to
+Equilibrium) algorithm \cite{conitzer03a,conitzer06a}. That is, if the
+other agents appear to be stationary the an \acro{awesome} agent plays
+the best response to their strategy. On the other hand, if they appear
+to be adapting then the agents retreats to the equilibrium strategy.
+
+The \acro{awesome} algorithm starts by playing the equilibrium
+strategy $\pi_i$ and keeping track of the actions each other player
+$j$ has played.  Every $N$ rounds (an epoch) it uses these actions to
+build a, possibly mixed, strategy $s_j$ for each player $j$. If $s_j$
+is the equilibrium strategy $\pi_j$ for all players $j$ then the
+algorithm keeps playing the equilibrium strategy. Otherwise, the
+algorithm plays the best response to $s_j$. It is easy to see that if
+all the other players are \acro{awesome} players then they will play
+their equilibrium strategies and will never diverge from it. If, on the
+other hand, an \acro{awesome} player is playing against some players
+who are, eventually, playing some other fixed strategy then it will
+play a best response strategy against those fixed strategies. Notice
+how the algorithm implements the reasoning behind the proof of the
+folk theorem.
+
+\begin{SCfigure}
+  \begin{minipage}{1.0\linewidth}
+    \begin{codebox}
+      \Procname{$\proc{awesome}$}
+      \li $\pi \gets$ equilibrium strategy
+      \li \Repeat
+      \li $\id{playing-equilibrium} \gets \const{true}$
+      \li $\id{playing-stationary} \gets \const{true}$
+      \li $\id{playing-equilibrium-just-rejected} \gets \const{false}$
+      \li $\phi \gets \pi_i$
+      \li $t \gets 0$
+      \li \While \id{playing-stationary}
+      \li \Do play $\phi$ for $N^t$ times in a row (an epoch)
+      \li     $\forall_j$ update $s_j$ given what they played in these
+      $N^t$ rounds.
+      \li     \If \id{playing-equilibrium}
+      \li     \Then  \If some player $j$ has $\max_a(s_j(a),\pi_j(a)) >
+      \epsilon_e$
+      \li       \Then
+                  $\id{playing-equilibrium-just-rejected} \gets
+                   \const{true}$
+      \li         $\phi \gets$ random action
+                \End
+      \li     \Else 
+                 \If $\id{playing-equilibrium-just-rejected} =
+                 \const{false}$ 
+      \zi             \>and some $j$ has
+                 $\max_a(s_j^{\text{old}}(a), s_j(a)) > \epsilon_s$
+      \li        \Then $\id{playing-stationary} \gets \const{false}$
+                 \End
+      \li        $\id{playing-equilibrium-just-rejected} \gets
+      \const{false}$
+      \li        $b \gets \arg \max_a u_i(a,s_{-i})$
+      \li        \If $u_i(b,s_{-i}) > u_i(\phi,s_{-i}) +
+      n|A_i|\epsilon_s^{t+1}\mu$
+      \li        \Then $\phi \gets b$
+                 \End
+              \End
+      \li     $\forall_j s_j^{\text{old}} \gets s_j$
+      \li     $t \gets t + 1$
+          \End
+      \End
+    \end{codebox}
+  \end{minipage}
+  \caption{The \proc{awesome} algorithm. Here $\pi$ is the equilibrium
+    strategy which has been calculated before the algorithm starts,
+    $n$ is the number of agents, $|A_i|$ is the number of actions the
+    agent can take, $\mu$ is the difference between the player's best
+    and worst possible utility values, and $s_j(a)$ gives the
+    probability with which $j$ will play action $a$ under strategy
+    $s_j$. Also, $\epsilon_e$ and $\epsilon_s$ must be decreased and
+    $N$ must be increased over time using a valid schedule.}
+  \label{fig:awesome}
+\end{SCfigure}
+
+While the basic idea is simple, in order to prove that the algorithm
+will converge some extra complexity had to be added to it. The
+algorithm, shown in figure~\ref{fig:awesome}, has two Boolean state
+variables \id{playing-equilibrium} which is true when all other agents
+played the equilibrium strategy during the last epoch and
+\id{playing-stationary} which is true when all the other agents played
+a stationary strategy during the last epoch. Also,
+\id{playing-equilibrium-just-rejected} is true when
+\id{playing-equilibrium} has just been set to false during the last
+check. The algorithm plays the same strategy $\phi$ for a whole epoch
+and then assesses the situation. If it turns out that either the
+players are not stationary or not in equilibrium the algorithm makes a
+note of this and changes its state. If the stationarity hypothesis is
+rejected then the whole algorithm is re-started again (back to line
+2).
+
+In order for the algorithm to always converge, $\epsilon_e$ and
+$\epsilon_s$ must be decreased and $N$ must be increased over time
+using a schedule where
+\begin{enumerate}
+\item $\epsilon_s$ and $\epsilon_e$ decrease monotonically to 0,
+\item $N$ increases to infinity,
+\item $\prod_{t \leftarrow 1,\ldots,\infty} 1 - \frac{\sum_i
+    |A_i|}{N^t(\epsilon_s^t)^2} > 0$
+\item $\prod_{t \leftarrow 1,\ldots,\infty} 1 - \frac{\sum_i
+    |A_i|}{N^t(\epsilon_e^t)^2} > 0$.
+\end{enumerate}
+
+Given such a valid schedule, it can be shown that
+\begin{theorem}[\proc{awesome} converges]
+  With a valid schedule, the \proc{awesome} algorithm converges to
+  best response if all the other players play fixed strategies and to
+  a Nash equilibrium if all the other players are \proc{awesome}
+  players.
+\end{theorem}
+
+Notice that the theorem says that, in self play, it converges to a
+Nash equilibrium which might be different from the originally agreed
+upon equilibrium strategy $\pi$. For example, say the agents agree on a
+mixed equilibrium strategy $\pi$ but some of the actions played in
+$\pi$ constitute a pure Nash equilibrium. In this case it could happen
+that the players end up, by chance, repeatedly playing the actions in
+the pure Nash equilibrium during the first epoch. They might then
+decide that everybody else is playing a stationary strategy which
+constitutes the pure Nash equilibrium. They will then play the best
+response to that pure Nash which, we know, is the same pure Nash
+equilibrium. As such, they will get stuck in that equilibrium.
+
+The \proc{awesome} algorithm is a simple way to force agents to
+converge to a Nash equilibrium while not letting them be exploited by
+other agents that are not using the same algorithm. In those cases
+where all agents are \proc{awesome} agents then it converges from the
+first step. However, it remains to be seen exactly how much it can be
+exploited by clever opponents who know the equilibrium it wants to
+play but would rather play something else.
+
+\section{Stochastic Games}
+
+In many multiagent applications the agents do not know the payoffs
+they will receive for their actions. Instead, they must take random
+actions in order to first explore the world so that they may then
+determine which actions lead them to the best payoffs. That is, the
+agents inhabit a multiagent Markov decision problem.
+
+
+\subsection{Reinforcement Learning}
+\label{sec:reinf-learn}
+%This should be in chapter 1 after MDP and Bellman updates.
+
+A very popular machine learning technique for solving these types of
+problems is called \td{reinforcement learning} \cite{sutton98a}, a
+specific instance of it is known as \td{Q-learning} \cite{watkins92a}.
+Reinforcement learning assumes that the agent lives in a Markov
+process and receives a reward in certain states. The goal is to find
+the right action to take in each state so as to maximize the agent's
+discounted future reward. That is, find the optimal policy.
+
+More formally, we define the reinforcement learning problem as given
+by an \acro{mdp} (section~\ref{sec:mark-decis-proc}) where the rewards
+are given on the edges instead of in the states. That is, the reward
+function is $r(s_t,a_t) \rightarrow \Re$. A reinforcement learning
+agent must find the policy $\pi^*$ which maximizes his future
+discounted rewards \eqref{eq:mod-bestaction}.
+
+\begin{SCfigure}
+  \begin{minipage}{1.0\linewidth}
+  \begin{codebox}
+    \Procname{$\proc{Q-learning}$}
+    \li $\forall_{s} \forall_a Q(s,a) \gets 0$; $\lambda \gets 1$;
+    $\epsilon \gets 1$      
+    \li $s \gets$ current state
+    \li \If $\proc{rand()} < \epsilon$ \>\>\>\>\> \Comment Exploration rate
+    \li \Then $a \gets $ random action
+    \li \Else $a \gets \arg \max_a Q(s,a)$
+    \End
+    \li Take action $a$
+    \li Receive reward $r$
+    \li $s' \gets$ current state
+    \li $Q(s,a) \gets \lambda (r +  \gamma \max_{a'}Q(s',a')) + (1-\lambda)Q(s,a)$
+    \li $\lambda \gets .99 \lambda$
+    \li $\epsilon \gets .98 \epsilon$
+    \li \Goto 2
+  \end{codebox}
+  \end{minipage}
+  \caption{\proc{Q-Learning} algorithm. Note that the $.99$ and
+    $.98$ numbers are domain-dependent and need to be changed for
+    each problem to ensure that the algorithm works. With $\epsilon
+    \gets 0$ the algorithm is still guaranteed to work, but in
+    practice it might take longer to converge.}
+  \label{fig:qlearn}
+\end{SCfigure}
+
+The reinforcement learning problem can be solved using the
+\proc{Q-learning} algorithm shown in figure~\ref{fig:qlearn}.  Here
+$\lambda$ is the \td{learning rate} and $\epsilon$ is the
+\td{exploration rate}.  Both are always between 0 and 1. The learning
+rate guides how heavily we consider new rewards versus old values we
+have learned. When $\lambda = 1$ the algorithm completely re-writes
+the old $Q(s,a)$ value while when $\lambda = 0$ is completely ignores
+any new reward and instead uses the old $Q(s,a)$. The exploration rate
+ensures that we do not converge too quickly to a solution. When
+$\epsilon = 1$ all the actions taken by the agent are chosen randomly
+while when $\epsilon = 0$ all the actions taken maximize the $Q$
+values.
+
+\netlogo{qlearning}It has been shown that \proc{Q-learning} will
+converge.
+
+\begin{theorem}[\proc{Q-learning} Converges] Given that the learning
+  and exploration rates decrease slowly enough, \proc{Q-learning} is
+  guaranteed to converge to the optimal policy \cite{watkins92a} .
+\end{theorem}
+
+\proc{Q-learning} differs from the value-iteration algorithm, from
+figure~\ref{fig:value-iter}, in several respects. In \proc{Q-learning}
+the agent takes actions and learns at the same time. Of course, the
+agent's initial actions will be completely random as it has not
+learned anything about its expected rewards but, as it takes more
+actions it learns to choose better actions. Also, the value-iteration
+algorithm requires knowledge of the complete transition and reward
+functions of the \acro{mdp} while the \proc{Q-learning} algorithm
+explores the parts of the \acro{mdp} that it needs. However, to be
+sure that it has found the optimal policy, a \proc{Q-learning} agent
+will need to visit every state and take every action.
+
+\medskip
+
+The convergence results of \proc{Q-learning} are impressive, but they
+assume that only one agent is learning. We are interested in
+multiagent systems where multiple agents are learning. In these games
+the reward function is no longer a function of the state and the
+agent's actions, instead it is a function of the state and all the
+agents' actions. That is, one agent's reward depends on the actions
+that other agents take, as captured by the multiagent \acro{mdp} we
+discussed in section~\ref{sec:mult-mark-decis}. In these multiagent
+\acro{mdp}s it might be impossible for a \proc{Q-learning} agent to
+converge to an optimal policy.
+
+As we set out to study these multiagent learning problems, the first
+thing we need to do is choose a new equilibrium. Under the single
+agent problem definition we were simply looking for the policy that
+maximizes the agent's discounted rewards. However, when we have
+multiple agents we might want to maximize the sum of all agents'
+discounted future rewards (social welfare), or we might choose a more
+amenable (for convergence) equilibrium such as the \td{Nash
+  equilibrium point}.
+
+\begin{definition}[Nash Equilibrium Point] A tuple of $n$ policies
+  $(\pi^*_1,\ldots,\pi_n^*)$ such that for all $s \in S$ and $i =
+  1,\ldots,n$,
+  \[\forall_{\pi_i \in \Pi_i} v_i(s,\pi_1^*,\ldots\pi_n^*) \geq v_i(s,\pi_1^*,\ldots
+  \pi_{i-1}^*, \pi_i, \pi_{i+1}^*,\ldots,\pi_n^*), \]
+  where $v_i(s,\pi_1^*,\ldots\pi_n^*)$ is the total rewards (value) that
+  agent $i$ can expect to receive starting from state $s$ and assuming
+  that agents use policies $\pi_1^*,\ldots\pi_n^*$.
+\end{definition}
+The Nash equilibrium point is a set of policies such that no one agent
+$i$ will gain anything by changing its policy from its Nash
+equilibrium point strategies to something else.  As with the regular
+Nash equilibrium, it has been shown that the Nash equilibrium point
+always exists.
+
+\begin{theorem}[Nash Equilibrium Point Exists] Every $n$-player
+  discounted stochastic game possesses at least one Nash equilibrium
+  point in stationary strategies \cite{hu03a}.
+\end{theorem}
+
+\begin{SCfigure}
+  \begin{minipage}{1.0\linewidth}
+  \begin{codebox}
+    \Procname{$\proc{NashQ-learning}$}
+    \li $t \gets 0$
+    \li $s \gets$ current state
+    \li $\forall_{s \in S} \forall_{j \gets 1,\ldots,n} \forall_{a_j \in
+      A_j} Q_j^t(s,a_1,\ldots,a_n) \gets 0$
+    \li Choose action $a_i^t$
+    \li $s \gets s'$
+    \li Observe $r_1^t,\ldots,r_n^t;\, a_1^t,\ldots,a_n^t;s'$
+    \li \For $j \gets 1,\ldots,n$ 
+    \li \Do $Q_j^{t+1} (s, a_1,\ldots,a_n) \gets$
+    \zi \>$(1 - \lambda^t) Q_j^{t}
+    (s, a_1,\ldots,a_n) + \lambda^t(r_j^t + \gamma \id{NashQ}_j^t(s'))$
+    \zi where $\id{NashQ}_j^t(s') =  Q_j^t(s', \pi_1(s')\cdots\pi_n(s'))$
+    \zi and $\pi_1(s')\cdots\pi_n(s')$ are Nash EP calculated from $Q$ values
+    \End
+    \li $t \gets t + 1$
+    \li \Goto 4
+  \end{codebox}
+  \end{minipage}
+  \caption{\proc{NashQ-learning} algorithm}
+  \label{fig:nashq}
+\end{SCfigure}
+
+We can find the Nash equilibrium point in a system where all the
+agents use the \td{\proc{NashQ-learning}} algorithm shown in
+figure~\ref{fig:nashq}. In this algorithm each agent must keep $n$
+$Q$-tables, one for each agent in the population. These tables are
+updated in line~7 using a formula similar to the standard
+\proc{Q-learning} update formula but instead of using the Q values to
+determine future rewards it uses the \id{NashQ} tables. These tables
+hold the Q value for every agent given that all agents play the same
+Nash equilibrium policy on the multiagent \acro{mdp} game induced by
+the current Q values. That is, the algorithm assumes that the
+\acro{mdp} is defined by the Q tables it has and then calculates a
+Nash equilibrium point for this problem. We thus note that at each
+step the each agent must calculate the Nash equilibrium point given
+the current $Q$ functions.  This can be an extremely expensive
+computation---harder than finding the Nash equilibrium for a game
+matrix.
+
+Still, the \proc{NashQ-learning} algorithm is guaranteed to converge
+as long as enough time is given so that all state/action pairs are
+explored sufficiently, and the following assumptions hold.
+
+\begin{assumption}
+  \label{ass1}
+  There exists an adversarial equilibrium for the entire game and
+  for every game defined by the $Q$ functions encountered during
+  learning.
+\end{assumption}
+Where an adversarial equilibrium is one where no agent has anything to
+lose if the other agents change their policies. That is, if the other
+agents change their policies from equilibrium then the agent's
+expected reward will either stay the same or increase.
+\begin{assumption}
+  \label{ass2}
+  There exists a coordination equilibrium for the entire game and for
+  every game defined by the $Q$ functions encountered during learning.
+\end{assumption}
+Where a coordination equilibrium is one where all the agents receive
+the highest possible value. That is, the social welfare solution.
+
+Under these assumptions it can be shown that \proc{NashQ-learning}
+converges.
+
+\begin{theorem}[\proc{NashQ-learning} Converges]
+  Under assumptions~\ref{ass1} and~\ref{ass2} \proc{NashQ-learning}
+  converges to a Nash equilibrium as long as all the equilibria
+  encountered during the game are unique \cite{hu03a}.
+\end{theorem}
+
+\begin{SCfigure}
+  \begin{minipage}{1.0\linewidth}
+  \begin{codebox}
+    \Procname{$\proc{friend-or-foe}$}
+    \li $t \gets 0$
+    \li $s_0 \gets$ current state
+    \li $\forall_{s \in S} \forall_{a_j \in A_j} Q_i^t(s,a_1,\ldots,a_n) \gets 0$
+    \li Choose action $a_i^t$
+    \li $s \gets s'$
+    \li Observe $r_1^t,\ldots,r_n^t;\, a_1^t,\ldots,a_n^t;\, s'$
+    \li $Q_i^{t+1} (s, a_1,\ldots,a_n) \gets$
+    \zi \>$(1 - \lambda^t) Q_i^{t} (s, a_1,\ldots,a_n) + \lambda^t(r_i^t + \gamma \id{NashQ}_i^t(s'))$
+    \zi \> where $\id{NashQ}_i^t(s') = \max_{\pi \in \Pi(X_1 \times\cdots\times X_k)} \min_{y_i,\ldots,y_l \in Y_1\times\cdots\times Y_l}$
+    \zi \>\> $\sum_{x_1,\ldots ,x_k \in X_1\times\cdots\times X_k} \pi(x_1)\cdots\pi(x_k) Q_i(s,x_1,\ldots, x_k,y_1,\ldots y_l)$
+    \zi \> and $X$ are actions for $i$'s friends and $Y$ are for the foes.
+    \End
+    \li $t \gets t + 1$
+    \li \Goto 4
+  \end{codebox}
+  \end{minipage}
+  \caption{\proc{friend-or-foe} algorithm. There are $k$ friends
+    with actions taken from $X_1,\ldots,X_k$, and $l$ foes with
+    actions taken from $Y_1,\ldots,Y_l$. }
+  \label{fig:fof}
+\end{SCfigure}
+
+These assumptions can be further relaxed by assuming that we can tell
+the agent whether the opponent is a ``friend'', in which case we are
+looking for a coordination equilibrium, or a ``foe'', in which case we
+are looking for an adversarial equilibrium \cite{littman01a}. With
+this additional information we no longer need to maintain a $Q$ table
+for each opponent and can achieve convergence with only one, expanded,
+$Q$ table. The algorithm is thus called the \proc{friend-or-foe}
+algorithm and is shown in figure~\ref{fig:fof}.
+
+In the \td{\proc{friend-or-foe}} algorithm the agent $i$ has $k$
+friends with action sets represented by $X_1,\ldots,X_k$ and $l$ foes
+with action sets represented by $Y_1,\ldots,Y_l$.  The algorithm
+implements the idea that $i$'s friends are assumed to work together to
+maximize $i$'s value and $i$'s foes are working to minimize it. We can
+show that \proc{friend-or-foe} converges to a stable policy. However,
+in general these do not correspond to a Nash equilibrium point. Still,
+we can show that it often converges to a Nash equilibrium.
+
+\begin{theorem}
+  \proc{foe-q} learns values for a Nash equilibrium policy if the game
+  has an adversarial equilibrium and \proc{friend-q} learns values for
+  a Nash equilibrium policy if the game has a coordination
+  equilibrium. This is true regardless of opponent behavior
+  \cite{littman01a}.
+\end{theorem}
+
+
+That is, if the game has one of the equilibria and we correctly
+classify all the other agents as either friends or foes then the
+\proc{friend-or-foe} algorithm is guaranteed to converge.
+
+\proc{friend-or-foe} has several advantages over
+\proc{NashQ-learning}. It is does not require the learning of $Q$
+functions for each one of the other agents and it is easy to implement
+as it does not require the calculation of a Nash equilibrium point at
+each step. On the other hand, it does require us to know if the
+opponents are friends or foes, that is, whether there exists a
+coordination or an adversarial equilibrium.
+
+Neither algorithm deals with the problem of finding equilibria in
+cases without either coordination or adversarial equilibria. Such
+cases are the most common and most interesting as they require some
+degree of cooperation among otherwise selfish agents.
+
+\section{General Theories for Learning Agents}
+\label{sec:learning-agents}
+
+The theory of learning in games provides the designer of multiagent
+systems with many useful tools for determining the possible
+equilibrium points of a system. Unfortunately, most multiagent systems
+with learning agents do not converge to an equilibrium. Designers
+often use learning agents because they do not know, at design time,
+the specific circumstances that the agents will face at run time.  If
+a designer knew the best strategy, that is, the Nash equilibrium
+strategy, for his agent then he would simply implement this strategy
+and avoid the complexities of implementing a learning algorithm.
+Therefore, we will see a multiagent system with learning agents when
+the designer cannot predict that an equilibrium solution will emerge.
+
+The two main reasons for this inability to predict the equilibrium
+solution of a system are the existence of unpredictable environmental
+changes that affect the agents' payoffs and the fact that on many
+systems an agent only has access to its own set of payoffs---it does
+not know the payoffs of other agents. These two reasons make it
+impossible for a designer to predict which equilibria, if any, the
+system would converge to. However, the agents in the system are still
+playing a game for which an equilibrium exists, even if the designer
+cannot predict it at design-time. But, since the actual payoffs keep
+changing it is often the case that the agents are constantly changing
+their strategy in order to accommodate the new payoffs.
+
+As mentioned earlier, learning agents in a multiagent system are faced
+with a moving target function problem \cite{vidal:98a}. That is, as
+the agents change their behavior in an effort to maximize their
+utility their payoffs for those actions change, changing the expected
+utility of their behavior. The system will likely have non-stationary
+dynamics---always changing in order to match the new goal. While game
+theory tells us where the equilibrium points are, given that the
+payoffs stay fixed, multiagent systems often never get to those
+points.  A system designer needs to know how changes in the design of
+the system and learning algorithms will affect the time to
+convergence.  This type of information can be determined by using
+\acro{clri} theory.
+
+\subsection{CLRI Model}
+\label{sec:clri-theory}
+
+The \td{CLRI model} \cite{vidalclri} provides a method for analyzing a
+system composed of learning agents and determining how an agent's
+learning is expected to affect the learning of other agents in the
+system.  It assumes a system where each agent has a decision function
+that governs its behavior as well as a target function that describes
+the agent's best possible behavior. The target function is unknown to
+the agent. The goal of the agent's learning is to have its decision
+function be an exact duplicate of its target function. Of course, the
+target function keeps changing as a result of other agents' learning.
+
+Formally, the \acro{clri} model assumes that there is a fixed set of
+autonomous agents in the system.  The system can be described by a set
+of discrete states $s \in S$ which are presented to the agent with a
+probability dictated by the fixed probability distribution
+$\mathcal{D}(S)$.  Each agent $i$ has a set of possible actions $A_i$
+where $|A_i| \geq 2$. Time is discrete and indexed by a variable $t$.
+At each time $t$ all agents are presented with a new $s \in
+\mathcal{D}(S)$, take a simultaneous action, and receive some payoff.
+The scenario is similar to the one used by fictitious play except for
+the addition of state $s$.
+
+Each agent $i$'s behavior is defined by a policy $\pi_i^t(s) : S
+\rightarrow A$. When $i$ learns at time $t$ that it is in state $s$ it
+will take action $\pi_i^t(s)$. At any time there is an optimal policy
+for each agent $i$, also known as its target function, which we
+represent as $\Pi_i^t(s)$. Agent $i$'s learning algorithm will try to
+reduce the discrepancy between $\pi_i$ and $\Pi_i$ by using the
+payoffs it receives for each action as clues as clues as to what it
+should do given that it does not have direct access to $\Pi_i$. The
+probability that an agent will take a wrong action is given by its
+error $e(\pi_i^t) = \Pro[\pi_i^t(s) \neq \Pi_i^t(s) \,|\, s
+\in \mathcal{D}(S)]$. As other agents learn and change their decision
+function, $i$'s target function will also change, leading to the
+moving target function problem, as depicted in
+figure~\ref{fig:learn-mas}.
+
+
+\begin{SCfigure}
+  \begin{minipage}{1.0\linewidth}
+  \begin{center}
+    \begin{tikzpicture}[style=dstyle]
+      \draw (0,0) node (dt) {$\pi^t_i$};
+      \draw (4,0) node (tt) {$\Pi^t_i$};
+      \draw[gray] (dt) -- node[below] {\textcolor{black}{$e(\pi_i^t)$}} (tt);
+      \draw (1,2) node (dtt) {$\pi^{t+1}_i$};
+      \draw[->] (dt) -- node[sloped,above] {Learn} (dtt);
+      \draw (6,0) node (ttt) {$\Pi^{t+1}_i$};
+      \draw[->] (tt) -- node[below] {Move} (ttt);
+      \draw[gray] (dtt) -- node[sloped,above] {\textcolor{black}{$e(\pi_i^{t+1})$}} (ttt);
+    \end{tikzpicture}
+  \end{center}
+  \end{minipage}
+  \caption{The moving target function problem.}
+  \label{fig:learn-mas}
+\end{SCfigure}
+
+
+% \centelatex-beamer-announce@lists.sourceforge.netrline{
+%   \xymatrix{
+%     & &  \delta_i^{t+1}  \ar@{~}[rrrrd]^{e(\delta_i^{t+1})}
+%     & & & \\
+%     \delta_i^t \ar[rru]^{\txt{Learn}} \ar@{~}[rrrrr]_{e(\delta_i^t)} &&
+%     & & & \Delta_i^t \ar[r]_{\txt{Move}} & \Delta_i^{t+1}
+%   }}
+
+
+An agent's error is based on a fixed probability distribution over
+world states and a Boolean matching between the decision and target
+functions. These constraints are often too restrictive to properly
+model many multiagent systems. However, even if the system being
+modeled does not completely obey these two constraints, the use of the
+\acro{clri} model in these cases still gives the designer valuable
+insight into how changes in the design will affect the dynamics of the
+system.  This practice is akin to the use of Q-learning in
+non-Markovian games---while Q-learning is only guaranteed to converge
+if the environment is Markovian, it can still perform well on other
+domains.
+
+The \acro{clri} model allows a designer to understand the expected
+dynamics of the system, regardless of what learning algorithm is used,
+by modeling the system using four parameters: Change rate, Learning
+rate, Retention rate, and Impact (\acro{clri}). A designer can
+determine values for these parameters and then use the \acro{clri}
+difference equation to determine the expected behavior of the system.
+
+The change rate ($c$) is the probability that an agent will change at
+least one of its incorrect mappings in $\delta^t(w)$ for the new
+$\delta^{t+1}(w)$. It captures the rate at which the agent's learning
+algorithm tries to change its erroneous mappings. The learning rate
+($l$) is the probability that the agent changes an incorrect mapping
+to the correct one. That is, the probability that $\delta^{t+1}(w) =
+\Delta^t(w)$, for all $w$. By definition, the learning rate must be
+less than or equal to the change rate, i.e. $l \leq c$. The retention
+rate ($r$) represents the probability that the agent will retain its
+correct mapping. That is, the probability that $\delta^{t+1}(w) =
+\delta^t(w)$ given that $\delta^t(w) = \Delta^t(w)$.
+
+\acro{clri} defines a volatility term ($v$) to be the probability that
+the target function $\Delta$ changes from time $t$ to $t+1$. That is,
+the probability that $\Delta^t(w) \neq \Delta^{t+1}(w)$. As one would
+expect, volatility captures the amount of change that the agent must
+deal with. It can also be viewed as the speed of the target function
+in the moving target function problem, with the learning and retention
+rates representing the speed of the decision function. Since the
+volatility is a dynamic property of the system (usually it can only be
+calculated by running the system) \acro{clri} provides an impact
+($I_{ij}$) measure. $I_{ij}$ represents the impact that $i$'s learning
+has on $j$'s target function. Specifically, it is the probability that
+$\Delta_j^t(w)$ will change given that $\delta_i^{t+1}(w) \neq
+\delta_i^t(w)$.
+
+Someone trying to build a multiagent system with learning agents would
+determine the appropriate values for $c$, $l$, $r$, and either $v$ or
+$I$ and then use 
+
+\begin{multline}
+  \label{eq:main:simp}
+  E[e(\delta_i^{t+1})] = 1 - r_i + v_i
+  \left(
+    \frac{|A_i|r_i - 1}{|A_i| -1}
+  \right) \\
+  + e(\delta_i^t)
+  \left(
+    r_i -l_i + v_i
+    \left(
+      \frac{|A_i|(l_i - r_i) + l_i - c_i}{|A_i| -1}
+    \right)
+  \right)
+\end{multline}
+
+in order to determine the successive expected errors for a typical
+agent $i$. This equation relies on a definition of volatility in terms
+of impact given by
+\begin{equation}
+  \label{eq:16}
+  \begin{split}
+    \forall_{w \in W} \; v_{i}^{t} &= \Pro[\Delta_i^{t+1}(w) \neq \Delta_i^t(w)] \\
+    &= 1 - \prod_{j \in N_{-i}}(1 - I_{ji} \Pro[\delta_j^{t+1}(w) \neq \delta_j^t(w)]), \\
+  \end{split}
+\end{equation}
+which makes the simplifying assumption that changes in agents'
+decision functions will not cancel each other out when calculating
+their impact on other agents. The difference equation
+\eqref{eq:main:simp} cannot, under most circumstances, be collapsed
+into a function of $t$ so it must still be iterated over.  On the
+other hand, a careful study of the function and the reasoning behind
+the choice of the \acro{clri} parameter leads to an intuitive
+understanding of how changes in these parameters will be reflected in
+the function and, therefore, the system. A knowledgeable designer can
+simply use this added understanding to determine the expected behavior
+of his system under various assumptions. An example of this approach
+is shown in \cite{brooks02a}.
+
+For example, it is easy to see that an agent's learning rate and the
+system's volatility together help to determine how fast, if ever, the
+agent will reach its target function. A large learning rate means that
+an agent will change its decision function to almost match the target
+function. Meanwhile, a low volatility means that the target function
+will not move much, so it will be easy for the agent to match it.
+Thus, if the agents have no impact on each other, that is, $I_{ij} =
+0$ for all $i,j$, then the agents will learn their target function and
+the system will converge. As the impact increases then it becomes more
+likely that the system will never converge.  
+
+Of course, this type of simple analysis ignores a common situation
+where the agent's high learning rate is coupled with a high impact on
+other agents' target function making their volatility much higher.
+These agents might then have to increase their learning rate and
+thereby increase the original agent's volatility. Equation
+\eqref{eq:main:simp} is most helpful in these type of feedback
+situations.
+
+
+\subsection{N-Level Agents}
+\label{sec:n-level-agents}
+
+Another issue that arises when building learning agents is the choice
+of a modeling level. A designer must decide whether his agent will
+learn to correlate actions with rewards, or will try to learn to
+predict the expected actions of others and use these predictions along
+with knowledge of the problem domain to determine its actions, or will
+try to learn how other agents build models of other agents, etc. These
+choices are usually referred to as \td{n-level} modeling agents---an
+idea first presented in the recursive modeling method
+\cite{gmytrasiewicz95a} \cite{gmytrasiewicz01a}.
+
+A \td{0-level} agent is one that does not recognize the existence of
+other agents in the world. It learns which action to take in each
+possible state of the world because it receives a reward after its
+actions. The state is usually defined as a static snapshot of the
+observable aspects of the agent's environment. A \td{1-level} agent
+recognizes that there are other agents in the world whose actions
+affect its payoff.  It also has some knowledge that tells it the
+utility it will receive given any set of joint actions. This knowledge
+usually takes the form of a game matrix that only has utility values
+for the agent. The 1-level agent observes the other agents' actions
+and builds probabilistic models of the other agents. It then uses
+these models to predict their action probability distribution and uses
+these distributions to determine its best possible action. A
+\td{2-level} agent believes that all other agents are 1-level agents.
+It, therefore, builds models of their models of other agents based on
+the actions it thinks they have seen others take. In essence, the
+2-level agent applies the 1-level algorithm to all other agents in an
+effort to predict their action probability distribution and uses these
+distributions to determine its best possible actions. A 3-level agent
+believes that all other agents are 2-level, an so on.  Using these
+guidelines we can determine that fictitious play
+(section~\ref{sec:fictitious-play}) uses 1-level agents while the
+replicator dynamics (section~\ref{sec:replicator-dynamics}) uses
+0-level agents.
+
+These categorizations help us to determine the relative computational
+costs of each approach and the machine-learning algorithms that are
+best suited for that learning problem. 0-level is usually the easiest
+to implement since it only requires the learning of one function and
+no additional knowledge. 1-level learning requires us to build a model
+of every agent and can only be implemented if the agent has the
+knowledge that tells it which action to take given the set of actions
+that others have taken. This knowledge must be integrated into the
+agents. However, recent studies in layered learning \cite{stone00a}
+have shown how some knowledge could be learned in a ``training''
+situation and then fixed into the agent so that other knowledge that
+uses the first one can be learned, either at runtime or in another
+training situation. In general, a change in the level that an agent
+operates on implies a change on the learning problem and the knowledge
+built into the agent.
+
+Studies with n-level agents have shown \cite{vidal:98b} that an
+n-level agent will perform better in a society full of (n-1)-level
+agents, and that the computational costs of increasing a level grow
+exponentially.  Meanwhile, the utility gains to the agent grow smaller
+as the agents in the system increase their level, within an economic
+scenario. The reason is that an n-level agent is able to exploit the
+non-equilibrium dynamics of a system composed of (n-1)-level agents.
+However, as the agents increase their level the system reaches
+equilibrium faster so the advantages of strategic thinking are
+reduced---it is best to play the equilibrium strategy and not worry
+about what others might do. On the other hand, if all agents stopped
+learning then it would be very easy for a new learning agent to take
+advantage of them. As such, the research concludes that some of the
+agents should do some learning some of the time in order to preserve
+the robustness of the system, even if this learning does not have any
+direct results. That is, there appear to be decreasing marginal
+returns for strategic thinking.
+
+% Add info on Reasoning about Knowledge book.
+
+\section{Collective Intelligence}
+\label{sec:coin}
+
+We can also try to use machine learning as a way to automatically
+build multiagent systems where each one of the agents learns to do
+what we want. For example, imagine a factory floor with boxes that
+need to be moved and robots of different abilities. Depending on the
+size and weight of the boxes, different robots, or combinations of
+robots, are able to move them. We know that our goal is for all boxes
+to be placed against the South wall. Then, rather than trying to come
+up with specific plans or rules of behavior for each robot, we instead
+install a reinforcement learning algorithm in each one of them and set
+them off to learn how best to coordinate. The question we must then
+ask is: what is the reward function for each agent? As we saw in the
+\acro{clri} model, one agent's actions can have an impact on another
+agent's target function thus making it hard, or even impossible, for
+the other agent to converge in its learning. For example, if one robot
+keeps changing its behavior and moving around randomly then it will be
+impossible for another agent to learn to predict when they will both
+be in front of a large box so that they can move it together.
+
+Collective intelligence (\td{COIN}) aims to formalize these ideas and
+determine what kind of rewards we should provide
+reinforcement-learning agents in order to achieve a desired global
+behavior \cite{wolpert99a}. Specifically, we are given a global
+utility function $U(s,\va) \rightarrow \Re$ which tells us the value
+for every vector of actions $\va = \{a_1, a_2,\ldots, a_n\}$ of the
+agents and state of the world $s$. The agents are assumed to use some
+reinforcement learning algorithm, such as Q-learning. Our problem is
+then to define the agents' reward functions $u_i(s, \va)$ such that
+the agents will end up with policies $\pi_i^*$ that maximize $U$.
+Notice that simply setting $u_i(s, \va) = U(s, \va)$ for all $i$ can
+lead to agents receiving an uninformative reward. For example, if a
+confused agents throws itself against a wall while, at the same time,
+all the other agents cooperate to move the box correctly then the
+confused agent will receive a high reward and will thus likely
+continue to throw itself against the wall.
+
+Still, in general we do want to align each agent's rewards with the
+global utility. We can quantify this alignment by defining agent $i$'s
+preference over $s,\va$ as
+\begin{equation}
+  \label{eq:preference}
+  P_i(s,\va) = \frac{\sum_{\va' \in \vA} \Theta[u_i(s,\va) - u_i(s,\va')]}{|\vA|},
+\end{equation}
+where $\Theta(x)$ is the Heaviside function which is 1 if $x$ is
+greater than or equal to 0, otherwise it is 0. Similarly, we can
+define the global preference function as
+\begin{equation}
+  \label{eq:global-pref}
+    P(s,\va) = \frac{\sum_{\va' \in \vA} \Theta[U(s,\va) - U(s,\va')]}{|\vA|}.
+\end{equation}
+Both of these functions serve to rank the agents', or the global,
+preferences over the set of all possible states and actions vectors.
+For example, if a particular $(s,\va)$ is preferred over all others
+then $P(s,\va) = 1$.  
+
+In general, we might want an agent's preferences to be similar to the
+system's preferences so that the agent's learning mechanism will try
+to converge towards the desired system's preferences. A system where,
+for all agents $i$ it is true that $P_i(s,\va) = P(s,\va)$ is called
+\td{factored}. These systems are nice in that they provide the correct
+incentives to the agents in all situations. Thus, factored systems are
+more likely to converge to the set of policies that maximizes $U$. 
+
+It is possible that factored systems might not converge because
+agents' action might have an impact on each other thus changing each
+other's target function.  This idea is captured within the \acro{coin}
+framework as the \td{opacity} of $u_i(s,\va)$. Specifically, we define
+the opacity $\Omega_i$ for agent $i$ as
+\begin{equation}
+  \label{eq:opacity}
+  \Omega_i(s,\va) = \sum_{\va' \in \vA} \Pro[\va']
+  \frac{|u_i(s,\va) - u_i(s,\va'_{-i},\va_i)|}{|u_i(s,\va) - u_i(s,\va_{-i},\va'_{i})|}.
+\end{equation}
+The opacity is zero when the agent's rewards are the same regardless
+of the actions taken by other, that is, when the other agents' actions
+have no impact on what the agent should do. On the other hand, the
+opacity gets larger as the other agents' actions change the reward the
+agent will get. Just like with the \acro{clri} impact, if the opacity
+is zero for all states and action vectors then the multiagent learning
+problem is reduced to the single-agent learning problem as the agents
+have no effect on each other's target function. More generally, a
+decrease in the opacity amounts to an increase in the signal-to-noise
+ratio that the agent receives via its reward function.
+
+Systems that are both factored and have zero opacity for all agents
+are extremely rare, but would be easy to solve. Systems where the
+opacity is zero for all agents amount to multiple learning problems
+that do not interfere with each other and are easy to solve, but they
+are also very rare. Our goal can now be re-stated as that of finding
+reward functions for each agent that have as low opacity as possible
+while also being as highly factored as possible.
+
+One solution \acro{coin} proposes is the use of the \td{wonderful
+  life} reward function which gives each agent a reward proportional
+to its own contribution to the global utility. It implements the same
+idea as the \acro{vcg} payments (Chapter~\ref{vcg}). Formally, agent
+$i$'s wonderful life reward is given by
+\begin{equation}
+  \label{eq:wonderful-life}
+  u_i(s,\va) = U(s, \va) - U(s,\va_{-i}),
+\end{equation}
+where the $U(s,\va_{-i})$ represents the utility in state $s$ when
+agent $i$ does not exist and all other agents take actions as in
+$\va_{-i}$. Notice that this equation can be derived directly from the
+global utility function. Thus, it is applicable to any system where we
+have a pre-defined utility function $U$. It has been shown that this
+reward function performs better than using $u_i = U$ and other
+seemingly appropriate reward functions \cite{wolpert99b,tumer04a}.
+
+Another solution is the \td{aristocrat utility}, which is defined as
+\begin{equation}
+  \label{eq:aristocrat}
+  u_i(s,\va) = U(s, \va) - \sum_{\va' \in \vA} \Pro[\va'] U(s,\va_{-i},\va'_i),
+\end{equation}
+where $\Pro[\va']$ is the probability that $\va'$ happens.
+\netlogo{coin} The aristocrat utility measures the difference in the
+global utility between the agent's action and its average or expected
+action. It has been shown that this reward function also performs
+well, sometimes better than the wonderful life utility
+\cite{wolpert01a} .
+
+
+\section{Summary}
+% future challenges
+
+We have seen how the theory of learning in games provides us with
+various equilibrium solution concepts and often tells us when some of
+them will be reached by simple learning models.  On the other hand, we
+have argued that the reason learning is used in a multiagent system is
+often because there is no known equilibrium or the equilibrium point
+keeps changing due to outside forces. We have also shown how the
+\acro{clri} theory and n-level agents are attempts to characterize and
+predict, to a limited degree, the dynamics of a system given some
+basic learning parameters.
+
+\section{Recent Advances}
+\label{sec:recent-advances}
+
+The GAMUT \cite{nudelman04a} software can produce game matrices from
+thirty-five base classes of games. These matrices can be used to
+determine how well learning algorithms perform under all possible game
+types and sizes.
+
+\begin{exercises}
+  \item In general, which game matrices have cycles for fictitious play?
+\end{exercises}
+
+
+% regret matching, amy greenwald
+% \url{http://www.cs.brown.edu/courses/cs295-5/readings/gjm.pdf}
+
+%http://www.mcs.utulsa.edu/~banerjdi/aaai05MALWshop-CJAL.pdf and other
+% "Reaching Pareto Optimality in Prisoner's Dilemma Using Conditional
+% Joint Action Learning," where if both agents use the given learning
+% algorithm they will converge to a Pareto optimal solution.
+
+%Parkes' class
+%%http://www.eecs.harvard.edu/~parkes/cs286r/spring06/schedule.html
+%has a few papers on MAL.
+
+%Upcoming special issue of Machine Learning
+%http://www.cs.rutgers.edu/~mlittman/topics/mlj05-gametheory/
+%Learning and Computational Game Theory: 
+
+%A tutorial on MAL
+%http://www.cs.rutgers.edu/~mlittman/talks/ijcai03-games/
+%A paper on learning-teaching in MAL
+%http://www.cs.utexas.edu/~pstone/Papers/bib2html-links/threats-ATAL2001.pdf
+
+%%% Local Variables: 
+%%% mode: latex
+%%% TeX-command-default: "PDFlatex"
+%%% TeX-master: "~/wp/mas/mas"
+%%% End: 

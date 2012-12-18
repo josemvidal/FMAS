@@ -1,0 +1,289 @@
+%; whizzy -pdf .
+\documentclass[10pt]{book}
+\usepackage{url,hyperref,clrscode,amsmath,amsthm,apalike,fancyhdr,booktabs}
+\usepackage[sf,bf,tiny]{titlesec} %add bf for boldface titles
+\usepackage{pgf,tikz,pgflibraryshapes,pgflibraryarrows,pgfbaselayers,pgfbaseplot}
+\usepackage{multirow,colortbl}
+\usepackage[paperwidth=5.82in,paperheight=7.76in,marginparwidth=.75in,marginparsep=.3in,left=.25in,right=.25in,top=.1in,bottom=.1in]{geometry}
+%\usepackage[marginparwidth=1.5in,marginparsep=.2in,left=.75in,right=2in,top=.75in,bottom=.75in,paperwidth=6in,paperheight=9in]{geometry}
+\usepackage[small,labelfont={sf,bf}]{caption}
+
+%\usepackage[margincaption,ragged]{sidecap} 
+\newenvironment{SCfigure}{\begin{figure}}{\end{figure}}
+\newenvironment{SCtable}{\begin{table}}{\end{table}}
+
+\usepackage{mparhack}%fixes a bug where margin notes sometimes appeared on wrong side
+
+%Add two special symbols: a filled circle and an open circle
+\usepackage{wasysym}
+\newcommand{\medbullet}{\mbox{\wasyfamily\char32}}
+\newcommand{\medcirc}{\mbox{\wasyfamily\char35}}
+
+\newcounter{exercise}
+\newenvironment{exercises}{\section*{Exercises}\addcontentsline{toc}{section}{Exercises}\begin{list}
+{\arabic{chapter}.\arabic{exercise}}
+{\usecounter{exercise}}}{\end{list}}
+
+%\usepackage[urw-garamond]{mathdesign} %does not have boldface for rm font.
+
+%\usepackage{eco} %use oldstyle (lowercase) numbers. Unf. the numbers
+%are type 3 so we'll need to use something else.
+
+%\usepackage{adobegaramond} %font bought from Adobe, seems to work well
+%with CM math but does not have sans-serif font.
+
+%Use times fonts
+%\usepackage{mathptmx}
+
+%Set up times roman as the main font and adobe helvetica (95%) as the
+%sans serif fong. Adds support  for some special characters, like the circles.
+%\usepackage{txfonts} 
+
+%Intro to game theory uses mathpazo 10pt, Palatino font
+%\usepackage{mathpazo} 
+%check out mathdesign package for more fonts
+
+\usepackage{makeidx}
+\makeindex
+
+
+%headers
+\pagestyle{fancy}
+\fancyhead{} % clear all header fields
+%\fancyhead[RO]{\textsf{\rightmark}}
+%\fancyhead[LE]{\textsf{\leftmark}}
+\fancyhead[RO]{\nouppercase{\textsf{\textbf{\rightmark}}}\hfill\textbf{\thepage}}
+\fancyhead[LE]{\textbf{\thepage}\hfill\nouppercase{\textsf{\textbf{\leftmark}}}}
+
+%\fancyheadoffset[RO,LE]{\marginparwidth+\marginparsep}
+
+%\fancyhead[LE]{\slshape \leftmark}
+%\fancyfoot[C]{\thepage}
+\fancyfoot{}
+\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand{\footrulewidth}{0pt}
+\setlength{\headheight}{15pt} 
+
+%Don't leave blank spaces
+\renewcommand{\topfraction}{.9}
+\renewcommand{\bottomfraction}{.7}
+\renewcommand{\textfraction}{.1}
+\renewcommand{\floatpagefraction}{.9}
+
+%hyphenated words
+\hyphenation{re-in-force-ment a-syn-chro-nous com-bi-na-to-rial}
+
+
+%Make empty pages trully empty
+\makeatletter
+\def\cleardoublepage{\clearpage\if@twoside \ifodd\c@page\else
+  \hbox{}
+  \vspace*{\fill}
+  \begin{center}
+%    This page intentionally left blank.
+  \end{center}
+  \vspace{\fill}
+  \thispagestyle{empty}
+  \newpage
+  \if@twocolumn\hbox{}\newpage\fi\fi\fi}
+\makeatother
+
+%marginal comments. Changing the c to a t moves the box down.
+\newcommand{\mc}[1]{\marginpar{\mbox{}\fbox{\raggedright
+        \begin{minipage}[c]{\marginparwidth}\raggedright
+          {\small #1}
+        \end{minipage}}}}
+
+%term definition
+%\newcommand{\td[1]{\mbox{}\textbf{#1}\marginpar{\center
+%\textsc{#1}}}
+
+%place the terms flush against the outside
+\usepackage{chngpage}
+\newcommand{\td}[1]{\mbox{}\textbf{#1}\index{#1}\marginpar{%
+\checkoddpage\ifcpoddpage\raggedleft\else\raggedright\fi\textsc{#1}}}
+%\tdi{name as it looks}{name to be indexed}
+\newcommand{\tdi}[2]{\mbox{}\textbf{#1}\index{#2@#1}\marginpar{%
+\checkoddpage\ifcpoddpage\raggedleft\else\raggedright\fi\textsc{#1}}}
+\newcommand{\idx}[1]{#1\index{#1}}
+\newcommand{\idxi}[2]{#1\index{#2@#1}}
+
+
+%netlogo links...could use cooltooltips package from CTAN for pop-up messages.
+\newcommand{\netlogo}[1]{\marginpar{%
+\begin{center}
+\tikz[x=.5cm,y=.5cm,line width=1pt]{\draw (0,0) -- (1,2) -- (2,0) --
+  (1,.5) -- cycle;}
+
+\texttt{\href{http://jmvidal.cse.sc.edu/netlogomas/#1.html}{#1}}
+\end{center}}}
+
+%hypersetup for pdf
+\hypersetup{ %bookmarksopen,
+  bookmarksnumbered,   
+  colorlinks=false,
+  pdfborder=0 0 0, %eliminate hyperlink highlighting
+  pdftitle={Fundamentals of Multiagent Systems},
+  pdfauthor={Jose M. Vidal},
+  pdfsubject={},
+  pdfkeywords={multiagent systems, game theory, economics},
+  %FitBH=fit visible, FitH=fit width.
+  pdfview=FitH,
+  pdfstartview=FitH
+}
+
+%probabilities
+\newcommand{\Pro}{\ensuremath{\mathbf{Pr}}}
+%vectors
+\newcommand{\vu}{\ensuremath{\vec{u}}} %outcome
+\newcommand{\vv}{\ensuremath{\vec{v}}} %another outcome
+\newcommand{\va}{\ensuremath{\vec{a}}} %actions
+\newcommand{\vA}{\ensuremath{\vec{A}}} %actions
+\newcommand{\vb}{\ensuremath{\vec{b}}} %beliefs in POMDP
+\newcommand{\bidi}{\ensuremath{b^{\text{items}}}}
+\newcommand{\bidp}{\ensuremath{b_1}}
+\newcommand{\bidpi}{\ensuremath{b_1^{\text{items}}}}
+\newcommand{\bidv}{\ensuremath{b^{\text{value}}}}
+\newcommand{\bidpv}{\ensuremath{b_1^{\text{value}}}}
+\newcommand{\bida}{\ensuremath{b^{\text{agent}}}}
+\newcommand{\astar}{\ensuremath{A^*}}
+\newcommand{\idastar}{\ensuremath{IDA^*}}
+%acronyms
+\newcommand{\acro}[1]{\textsc{#1}}
+
+%pgf stuff
+%a stick-figure person
+\newcommand{\person}[1]{%
+\draw #1 circle (.1cm)
+++(0,-.1) -- ++(0,-.4) -- ++(-.2, -.3) 
+++(.4,0) -- ++(-.2,.3) 
+++(0,.2) -- ++(-.3,-.1)
+++(.3,.1) -- ++(.3,-.1);}
+%default style for all tikzpictures
+\tikzstyle dstyle=[line width=1pt]
+\tikzstyle thinline=[line width=.1pt]
+
+
+\newcommand{\hreffoot}[2]{\href{#1}{#2}}
+
+%theorems
+\newtheorem{theorem}{Theorem}[chapter]
+\newtheorem{assumption}{Assumption}[chapter]
+\newtheorem{definition}{Definition}[chapter]
+
+
+%snugbox came from usenet, via google. I use it when placing text
+%inside pgf nodes.
+\makeatletter
+\def\snugbox{\hbox\bgroup\setbox\z@\vbox\bgroup
+    \leftskip\z@\expandafter\let\expandafter\\\csname @normalcr\endcsname
+    \bgroup\aftergroup\make@snug\noindent
+    \let\next=}
+\def\make@snug{\par\sn@gify\egroup \box\z@\egroup}
+\def\sn@gify
+   {\skip\z@=\lastskip \unskip
+    \advance\skip\z@\lastskip \unskip
+    \unpenalty
+    \setbox\z@\lastbox
+    \ifvoid\z@ \nointerlineskip \else {\sn@gify} \fi
+    \hbox{\unhbox\z@}\nointerlineskip
+    \vskip\skip\z@
+    }
+\makeatother
+
+%pictures of famous people on the margins
+%\mp{picture filename}{name of person}{birth}{death}{other}
+\newcommand{\mpic}[5]{\mc{\includegraphics[width=\marginparwidth]{#1}
+    #2. \oldstylenums{#3}--\oldstylenums{#4}. #5}}
+\newcommand{\mpicnd}[3]{\mc{\includegraphics[width=\marginparwidth]{#1}
+    #2. #3}}
+
+%Elements of Typographical style tips:
+%Get rid of extra space after period.
+\frenchspacing
+\begin{document}
+
+\thispagestyle{empty} %cover page
+\phantom{a} %ugly hack, but otherwise vspace does not work
+\vspace{3in}
+{\Large Fundamentals \emph{of}}
+
+\smallskip
+
+{\Huge Multiagent Systems}
+
+\smallskip
+
+with NetLogo Examples
+
+\bigskip
+
+\hspace{1in}{\Large \emph{Jos\'{e} M Vidal}}
+
+\vspace{1in}
+
+
+\hfill\textsc{\today}
+
+
+\newpage %copyright page
+\phantom{a} 
+\vspace{3in}
+\thispagestyle{empty}
+\textbf{Fundamentals of Multiagent Systems}
+
+by Jos\'{e} M. Vidal
+
+\smallskip
+
+Copyright \textcopyright{} 2007 Jos\'{e} M. Vidal. All rights reserved.
+
+\tableofcontents
+% Add a BDI architecture chapter? 
+
+%Thanks to
+%Jiangbo Dang, Huang Jingshan
+
+\include{preface/preface}
+
+\include{models/models}
+
+\include{dconstraints/dconstraints}
+
+\include{gametheory/gametheory}
+
+\include{learningmas/learningmas}
+
+\include{negotiation/negotiation}
+
+\include{auctions/auctions}
+
+\include{dmd/dmd}
+
+\include{gpgp/gpgp}
+
+\include{bio/bio}
+
+%AI planning, GPGP chapter
+
+%Biology-inspired mas coordination
+%class- has papers
+%http://www.eecs.harvard.edu/~rad/
+%http://www.eecs.harvard.edu/~rad/courses/cs266-fall04/ 
+\appendix
+\nocite{aamas04,aamas05,aamas06} %cite the proceedings
+\bibliographystyle{apalike}
+\cleardoublepage
+\addcontentsline{toc}{chapter}{Bibliography}
+\nocite{aamas07}  %crossref
+\bibliography{../library,../vidal}
+\cleardoublepage
+\addcontentsline{toc}{chapter}{Index}
+\printindex
+\end{document}
+
+%%% Local Variables: 
+%%% mode: latex
+%%% TeX-command-default: "PDFlatex"
+%%% TeX-master: t
+%%% End: 

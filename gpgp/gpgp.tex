@@ -1,0 +1,473 @@
+\newcommand{\taems}{\acro{t\ae ms}}
+
+\chapter{Coordination Using Goal and Plan Hierarchies}
+\label{cha:hier-coord}
+
+
+Goal, plan, and policy hierarchies have proven to be very successful
+methods for coordinating agents. In these approaches we assume the
+existance of one of these hierarchies and the problem then becomes
+that of determining which parts of the hierarchy are to be done by
+which agents. In this setting we assume that the agents are
+coopertive, that is, they will do exactly what we tell them to. The
+problem is one of finding an good-enough answer. 
+
+Hierarchies like the ones we show here are a way to solve the problem
+of finding an optimal policy in multiagent MDPs. That is, since the
+traditional mathematical tools for solving those problems are
+computationally intractable for real-world problems, researchers
+hoping to build real-world systems have had to find ways to add more
+of their domain knowledge into the problem description so as to make
+it easier to find a solution. In general, the more we tell the agent
+about the world the easier it is to solve the problems it faces.
+Unfortunately, if we want to tell the agent more information about its
+domain we need more sophisticated data structures. In this chapter we
+describe one of the most popular such data structures: \taems{}. Once
+we have these new data structures we will generally need new
+algorithms which take advantage of the new information. The algorithms
+used for \taems{} are captured in the \acro{gpgp} framework which we also
+discuss.
+
+\section{\taems{}}
+\label{sec:taems}
+
+\td{\taems{}} is a language for representing large task hierarchies
+that contain complex constraints among tasks. You can think of it as a
+data structure for representing very complicated constraint
+optimization problems \cite{lesser04a}.  At its simplest, \taems{}
+represents a goal hierarchy. As such, \taems{} structures are roughly
+tree-shaped.  The root is the top-level goals that we want the system
+to achieve.  The children are the sub-goals that need to be achieved
+in order for the top goal to be achieved---a form of divide and
+conquer. The leafs of the tree are either goals that can be achieved
+by a single agent or tasks that can be done by an agent. These goals
+and tasks, however, might require the use of some resources or data.
+\taems{} represents these requirements with an arrow from the data or
+resource to the goal.
+
+
+%These techniques were developed by Victor Lesser group at U.
+%Massachusetts at Amherst over the last couple of decades.
+
+
+\begin{SCfigure}
+  \begin{minipage}{1.0\linewidth}
+    \begin{center}
+      \begin{tikzpicture}[line width=1pt]
+        \node [draw,circle] (g0) at (0,0) {$G_0$};
+        \node [draw,circle] (g1) at (-3,-2) {$G_1$};
+        \node [draw,circle] (g2) at (0,-2) {$G_2$};
+        \node [draw,circle] (g3) at (3,-2) {$G_3$};
+        \node [draw,circle] (g21) at (-2,-4) {$G_{21}$};
+        \node [draw,circle] (g22) at (0,-4) {$G_{22}$};
+        \node [draw,circle] (g23) at (2,-4) {$G_{23}$};
+        \node [draw,circle] (g31) at (4,-4) {$G_{31}$};
+        \draw (g0) -- (g1) node[coordinate,near start] (c1) {}
+        (g0) -- (g2)
+        (g0) -- (g3) node[coordinate,near start] (c2) {}
+        (g2) -- (g21) node[coordinate,near start] (c21) {}
+        (g2) -- (g22)
+        (g3) -- (g23) node[coordinate,near start] (c31) {}
+        (g2) -- (g23) node[coordinate,near start] (c22) {}
+        (g3) -- (g31) node[coordinate,near start] (c32) {};
+        \draw[color=gray] (c1) .. controls +(0,-.5) and +(0,-.5)
+        .. node[below,near end,gray] {\textcolor{black}{and}} (c2);
+        \draw[color=gray] (c21) .. controls +(0,-.4) and +(0,-.4)
+        .. node[below,near end,gray] {\textcolor{black}{and}} (c22);
+        \draw[color=gray] (c31) .. controls +(0,-.3) and +(0,-.3)
+        .. node[below,gray] {\textcolor{black}{or}} (c32);
+        \node (d1) at (-3,-6) {$data_1$};
+        \node (d2) at (-1,-6) {$data_2$};
+        \node (r1) at (1,-6) {$resource_1$};
+        \node (r2) at (3,-6) {$resource_2$};
+        \draw (g1) -- (d1)
+        (g21) -- (d1)
+        (g22) -- (d1)
+        (g22) -- (r1)
+        (g23) -- (d2)
+        (g31) -- (r2);
+        \draw[-angle 60,gray] (g1) -- node[sloped,above,near start] {\textcolor{black}{enables}}
+        (g22);
+        \draw[-angle 60,gray] (g2) -- node[sloped,above] {\textcolor{black}{enables}} (g3);
+        \node[anchor=south] at (-3,-1.5) {
+          \begin{small}
+            \setlength{\tabcolsep}{0pt}
+            \begin{tabular}{rl}
+              quality\textbf{:} & (.2,0)(.8,8) \\
+              cost\textbf{:} & (1,0) \\
+              duration\textbf{:} & (1,2)
+            \end{tabular}
+          \end{small}
+        };
+        \node[anchor=north west] at (4,-4.4) {
+          \begin{small}
+            \setlength{\tabcolsep}{0pt}
+            \begin{tabular}{rl}
+              q\textbf{:} & (.1,0)(.9,5) \\
+              c\textbf{:} & (1,10) \\
+              d\textbf{:} & (.4,2)(.6,5)
+            \end{tabular}
+          \end{small}
+        };
+      \end{tikzpicture}
+    \end{center}
+  \end{minipage}
+  \caption{An example of a simple \taems{} structure.}
+  \label{fig:taemsbasic}
+\end{SCfigure}
+
+
+Figure~\ref{fig:taemsbasic} shows a simple example \taems{} structure.
+It tells us that in order to achieve goal $G_0$ we must do $G_1$ and
+$G_2$ and $G_3$. But, in order to achieve $G_3$ we must achieve either
+$G_{23}$ or $G_{31}$. Note also how $G_{23}$ is a subgoal of both
+$G_2$ and $G_3$, which makes this a graph instead of a tree. The
+bottom row shows two data elements and two resources. Data elements
+are pieces of data that are needed in order to achieve the goals to
+which they are connected. Resources are consumable resources that are
+needed by their particular goals. The difference between data and
+resource is that a piece of data can be re-used as many times as
+needed while resources are consumed every time they are used and must
+therefore be replenished at some point. \taems{} also allows one to
+annotate links to resources to show how much of the resource is needed
+in order to achieve a particular goal. We can see that $G_1$ requires
+$data_1$ while $G_{22}$ requires $data_1$ and $resource_1$.
+
+Figure~\ref{fig:taemsbasic} also shows \td{non local effects},
+namely the \id{enables} constraint. The directed link (in red) from
+$G_1$ to $G_{22}$ indicates that $G_1$ enables $G_{22}$ which means
+that $G_1$ must be achieved before we can start to work on $G_{22}$ if
+we want $G_{22}$ to be achieved with quality.
+
+The \taems{} formal model calls for each leaf goal or task to be
+described by three parameters: quality, cost, and duration.
+Figure~\ref{fig:taemsbasic} shows examples of these parameter values
+for only two nodes ($G_1$ and $G_{31}$) due to space constraints.  In
+practice all leaf nodes should have similar values. These parameters
+represent the quality we expect to get when the goal is achieved (that
+is, how well it will get done), the cost the system will incur in
+achieving that goal, and the duration of time required to achieve the
+goal (or perform the task). The values are probabilistic. For example,
+$G_{31}$ will with .1 probability be achieved with a quality of 0
+(that is, it will fail to get achieved) while with a probability of .9
+it will be achieved with quality of 5. $G_{31}$ also has a fixed cost
+of 10 and it will take either 2 time units to finish, with probability
+.4, or 5 units to finish, with probability .6.
+
+Figure~\ref{fig:taemsbasic} shows two ways of aggregating the quality
+of children nodes: the and and or functions. These are boolean
+functions and require us to establish a quality threshold below which
+we say that a goal has not been achieve. \taems{} usually assumes that
+a quality of 0 means that the task was not achieved and anything
+higher means that the task was achieved. For example, $G_0$ will only
+be achieved if (because of the \id{and}) $G_1$ is achieved, which
+only happens with probability .8 each time an agent tries.
+
+
+\begin{SCfigure}
+  \begin{minipage}{1.0\linewidth}
+  \begin{center}
+  \begin{tabular}{rl} \toprule
+    Function & Description \\ \midrule
+    $q_{min}$ & minimum quality of all subtasks \\
+    $q_{max}$ & maximum quality of all subtasks \\
+    $q_{sum}$ & aggregate quality of all subtasks \\
+    $q_{last}$ & quality of most recently completed subtask \\
+    $q_{sum\_all}$ & as with $q_{sum}$ but all subtasks must be
+    completed \\
+    $q_{seq\_min}$ & as with $q_{min}$ but all subtasks must be
+    completed in order \\
+    $q_{seq\_max}$ & as with $q_{max}$ but all subtasks must be
+    completed in order \\ \bottomrule
+  \end{tabular}
+  \end{center}
+  \end{minipage}
+  \caption{Some of the quality accumulation functions available for a
+    \taems{} structure.}
+  \label{tab:qafs}
+\end{SCfigure}
+
+\taems{} allows us to use many different functions besides simply
+\id{and} and \id{or}. Table~\ref{tab:qafs} shows some of the
+\td{quality accumulation functions} (qafs) that are defined in
+\taems{}. Of course, the more different qafs we use the harder it
+will be, in general, to find a good schedule for the agents.
+Scheduling algorithms must always limit themselves to a subset of
+qafs in order to achieve realistic running times.
+
+\section{GPGP}
+
+Generalized Partial Global Planning (\acro{gpgp}) is the complete framework
+for multiagent coordination which includes, as one of its parts the
+\taems{} data structure. Over the years there have been many \acro{gpgp}
+agent implementations each one slightly different from the others but
+all sharing some basic features.  They have been applied to a wide
+variety of applications, from airplane repair scheduling, to supply
+chain management, to distributed sensor networks. The \taems{} data
+structure and the \acro{gpgp} approach to coordination via hierarchical task
+decomposition are among the most successful and influential ideas in
+multiagent systems.
+
+\subsection{Agent Architecture}
+
+\begin{SCfigure} 
+  \begin{minipage}{1.0\linewidth}
+    \begin{center} 
+      \begin{tikzpicture}[line width=1pt]
+        \node[draw,rounded corners] (taems) at (0,0) {
+          \begin{tabular}{c}
+            \taems{} Structure \\ and \\ Goal Criteria
+          \end{tabular}};
+        \node[draw] (dtc) at (-4.5,3) {
+          \begin{tabular}{c}
+            Design-to-Criteria \\ Scheduler
+          \end{tabular}};
+        \node[draw] (execution) at (4,3) {
+          \begin{tabular}{c}
+            Execution
+          \end{tabular}};
+        \node[draw] (task) at (4,0) {
+          \begin{tabular}{c}
+            Task \\ Assessor
+          \end{tabular}};
+        \node[draw] (gpgp) at (0,-3) {
+          \begin{tabular}{c}
+            \acro{gpgp} \\ Coordination
+          \end{tabular}};
+        \node[draw,rounded corners] (commitment) at (-4.5,-2) {
+          \begin{tabular}{c}
+            Non-Local \\ Commitment \\ Database
+          \end{tabular}};
+        \node[draw,rounded corners] (schedule) at (0,3) {
+          \begin{tabular}{c}
+            Schedule
+          \end{tabular}};
+        \draw[-angle 60] (taems) -- node[above,sloped] {Uses}
+        (dtc);
+        \draw[-angle 60] (commitment) -- node[above,sloped] {Uses}
+        (dtc);
+        \draw[-angle 60] (dtc) -- node[above] {Produces}
+        (schedule);
+        \draw[-angle 60] (schedule) -- node[above] {Uses}
+        (execution);
+        \draw[angle 60-angle 60] (execution.south east) -- +(0,-4) node[left]
+        {\begin{tabular}{c}
+            Action/Sense \\ Domain Info. Msgs.
+          \end{tabular}};
+        \draw[-angle 60] (execution.south west) 
+        .. controls +(-.5,-.5) and +(.5,-.5) .. 
+        node[below] {Reschedule Requests} (dtc.south east);
+        \draw[-angle 60] (execution) -- node[above,sloped] {State}
+        (task);
+        \draw[-angle 60] (execution) -- node[below,sloped] {Updates}
+        (taems);
+        \draw[-angle 60] (task) -- node[above,sloped] {Updates}
+        (taems);
+        \draw[-angle 60] (gpgp) -- node[below,sloped] 
+        {Reschedule Requests} (dtc.south);
+        \draw[-angle 60] (gpgp) -- node[above,sloped] {Updates}
+        (commitment);
+        \draw[-angle 60] (gpgp) -- node[above,sloped] {Updates}
+        (taems);
+        \draw[angle 60-angle 60] (gpgp) -- +(2,.5) node[right]
+        {Coordination Msgs};
+      \end{tikzpicture}
+    \end{center}
+  \end{minipage}
+  \caption{\acro{gpgp} agent architecture. Components are in squares and data
+    structures are in rounded squares.}
+  \label{fig:gpgpagent}
+\end{SCfigure}
+
+
+Figure~\ref{fig:gpgpagent} shows a typical agent architecture using
+\acro{gpgp}. The red squares are software components. These typically operate
+in parallel within the agent. The black rounded squares are some of
+the most important data structures used by a \acro{gpgp} agent.
+
+The \taems{} data structure lies at the heart of a \acro{gpgp} agent. This
+\taems{} structure is also annotated with the goal criteria. That is,
+it specifies which goals the agent should try to achieve. Remember
+that the basic \taems{} structure only lists all possible goals, it
+does not say which agent should try to achieve which goal. The \taems{}
+structure used by an agent does contain information that tells the
+agent who is trying to achieve which task. The agent gets this
+information from the \acro{gpgp} coordination module which we will explain
+later.
+
+The design to criteria scheduler is a component (program) which takes
+as input a \taems{} data structure, along with some commitments the
+agent has made, and generates a schedule. We will discuss the
+commitments in more detail later but, basically, the agent has the
+ability to make commitments to other agents that say that it will
+achieve a certain goal by a certain time. Once an agent has made a
+commitment the design to criteria scheduler does everything possible
+to ensure that the schedule it produces satisfies that commitment.
+The schedules produced by the scheduler are simply lists of tasks or
+goals the agent must execute and the times at which the agent will
+execute them.
+
+The execution module handles plan execution as well as monitoring.
+That is, it uses the schedule generated by the scheduler and instructs
+the agent to perform the next task according to the schedule. It then
+uses the agent's sensors to make sure that the task was accomplished.
+In the case of a failure, or if it notices that the next task/goal is
+impossible to achieve in the current world state, it will ask the
+design to criteria scheduler to generate a new schedule. The execution
+module also sends all the information it has about the world and the
+schedule's execution state to the task assessor module. The task
+assessor module has domain-specific knowledge and can determine if
+there are changes that need to be made to the \taems{} structure. For
+example, it might determine that one of the subgoals is no longer
+needed because of some specific change in the world. The execution
+module can also, in a more generalized manner, make changes to the
+\taems{} structure. These changes are all incorporated into the
+current \taems{} structure.
+
+\subsection{Coordination}
+
+\begin{SCfigure}
+  \begin{minipage}{1.0\linewidth}
+    \begin{center}
+      \begin{tikzpicture}[line width=1pt]
+        \node [draw,circle] (g0) at (-5,0) {$G_0^{1}$};
+        \node [draw,circle] (g1) at (-6,-2) {$G_1^{1,2}$};
+        \node [draw,circle] (g2) at (-4,-2) {$G_2^{2}$};
+        \draw (g0) -- (g1) (g0) -- (g2);
+        \draw[-angle 60] (g1) -- (g2);
+
+        \node [draw,circle] (g0b) at (0,0) {$G_0^{1}$};
+        \node [draw,circle] (g1b) at (-1,-2) {$G_1^{*}$};
+        \node [draw,circle] (g3b) at (-2,-4) {$G_3^{1}$};
+        \node [draw,circle] (g4b) at (0,-4) {$G_4^{2}$};
+        \node [draw,circle] (g2b) at (1,-2) {$G_2^{2}$};
+        \draw (g0b) -- (g1b) (g0b) -- (g2b) 
+        (g1b) -- (g3b) node[coordinate,near start] (c1b) {}
+        (g1b) -- (g4b) node[coordinate,near start] (c2b) {};
+        \draw (c1b) .. controls +(0,-.2) and +(0,-.2)
+        .. node[below] {max} (c2b);
+        \draw[-angle 60] (g1b) -- (g2b);
+      \end{tikzpicture}
+
+      \bigskip
+
+      \begin{tikzpicture}[line width=1pt]
+        \node [draw,circle] (g01) at (0,0) {$G_0^{1}$};
+        \node [draw,circle] (g11) at (-1,-2) {$G_1^{1}$};
+        \node [draw,circle] (g31) at (-2,-4) {$G_3^{1}$};
+        \draw (g01) -- (g11)
+        (g11) -- (g31) node[coordinate,near start] (c1) {};
+
+        \node [draw,circle] (g02) at (3,0) {$G_0^{1}$};
+        \node [draw,circle] (g12) at (2,-2) {$G_1^{2}$};
+        \node [draw,circle] (g42) at (3,-4) {$G_4^{2}$};
+        \node [draw,circle] (g22) at (4,-2) {$G_2^{2}$};
+        \draw (g02) -- (g12) (g02) -- (g22) 
+        (g12) -- (g42) node[coordinate,near start] (c2) {};
+        \draw[-angle 60] (g12) -- (g22);
+        \draw[dashed,-angle 60] (g11)
+        .. controls +(1,1) and +(-1,1) .. node[above] {CR} (g22);
+        \draw[dashed,-angle 60] (g31) -- node[above] {CR} (g12);
+        \draw[dashed,-angle 60] (g42) -- node[above] {CR} (g11);
+      \end{tikzpicture}
+    \end{center}
+  \end{minipage}
+  \caption{Example of how \acro{gpgp} forms coordination relationships.
+    Superscripts on the goals indicate the number of the agents that
+    can achieve that goal. The original \taems{} structure, on the top
+    left, is expanded, top right, and two graphs generated from it and
+    given to agents 1 and 2, bottom. The coordination relationships
+    are then added.}
+\label{fig:coord}
+\end{SCfigure}
+
+In parallel with all these modules, the \acro{gpgp} coordination module is
+always in communication with other agents and tries to keep the
+agent's commitments and \taems{} structure updated. The \acro{gpgp}
+coordination module implements (mostly) domain independent
+coordination techniques and is the module that tells the agent which
+of the goals and tasks in its \taems{} structure it should achieve.
+
+Figure~\ref{fig:coord} gives a pictorial view of the general steps the
+\acro{gpgp} module follows in order to achieve coordination among agents. The
+coordination module starts with the \taems{} structure shown on the
+left. The structure is then modified so that every goal that can be
+achieved by more than one agent is replaced by a new dummy goal which
+has one child for every agent that could perform the goal. Each one of
+the children is a new goal that can only be performed by one child.
+The children are joined by a $\max$ qaf. In Figure~\ref{fig:coord} we
+see show $G_1^{1,2}$, which could be achieved by either 1 or 2 (as
+denoted by the superscript) is replaced by a new $G_1$ with two
+children $G_3^1$ and $G_4^2$.
+
+The resulting graph is then divided among the agents such that each
+agent has the subgraph with all the goals that the agent can achieve
+plus all the ancestors of these goals (all the way to the root). This
+division can be seen in the last two graphs of Figure~\ref{fig:coord}.
+
+The \acro{gpgp} coordination module identifies \td{coordination
+  relationships} (CR). These come from two different situations: when
+a non-local effect in the original graph now starts in one graph and
+ends in another, or when a non-local effect or a subtask relationship
+has one end in one subgraph but the other end in both subgraphs.
+
+Notice that these CRs denote situations where one of the agents needs
+to either wait for the other to finish or to determine whether the
+other one has failed. The \acro{gpgp} module uses some mechanism to remove
+the uncertainty that these CRs cause. Specifically, it makes the agent
+commit to do those actions that are at the initiating end of the CR to
+the other agent. For example, in Figure~\ref{fig:coord} the \acro{gpgp}
+module would make agent 1 send to agent 2 the messages: ``Commit
+(\textbf{Do}($G_1$))'' and ``Commit (\textbf{Do}($G_3$))''.
+
+
+\subsection{Design-to-Criteria Scheduler}
+
+The design-to-criteria scheduler is a complex piece of software which
+uses search along with a bunch of heuristics to find a good schedule
+given the current \taems{} structure and the set of commitments. The
+scheduler only tries to schedule the first few tasks since it knows
+that it is likely that the problem will change and it will need to
+re-schedule. The scheduler also sometimes needs to create temporary
+commitments and generate schedules using those commitments for the
+\acro{gpgp} coordination module. That is, when the \acro{gpgp} coordination module
+wants to know how a certain commitment might affect the agent's other
+commitments it will ask the design-to-criteria scheduler to create a
+new schedule using those commitments. 
+
+The job of the scheduler is very complicated. It must decide how to
+satisfy goals in the \taems() structure and which ones are likely to
+generate the maximum utility. As such, the scheduler is a large piece
+of code which is generally considered a black box by \acro{gpgp} users. They
+just feed it the \taems{} structure and out comes a schedule. The
+scheduler solves this problem by using a number of search heuristics
+and other specialized techniques.
+
+\subsection{GPGP/\taems{} Summary}
+
+The \acro{gpgp}/\taems{} framework utilizes some key concepts. It views the
+problem of coordination as distributed optimization, in fact, it
+reduces complex problems to something similar to the distributed
+constraint optimization problem of Chapter~\ref{ch:dconstraints}. It
+provides a family of coordination mechanism for situation-specific
+control. It uses \taems{} to provide proven domain-independent
+representation of agent tasks, with support for multiple goals of
+varying worth and different deadline. It also uses quantitative
+coordination relationships among tasks.
+
+The general approach of \acro{gpgp} has been widely successful and has
+proven itself in many domains. The \taems{} structure has been adopted
+not just as a programming tools but also as a design tool to be used
+to better understand the problem. However, one problem with \acro{gpgp} has
+been that it has required modifications for each one of its
+applications. As such, \acro{gpgp} is best thought of as a general approach
+to designing multiagent systems rather than as a specific
+tool/architecture.
+
+%%% Local Variables: 
+%%% mode: latex
+%%% TeX-command-default: "PDFlatex"
+%%% TeX-master: "~/wp/mas/mas"
+%%% End: 
+
+
