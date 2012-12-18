@@ -5,5 +5,5 @@ pdflatex mas
 pdflatex mas
 makeindex mas
 pdflatex mas
-cp -f mas.pdf ~/httpd/html/library/mas.pdf
-chmod oug+r ~/httpd/html/library/mas.pdf
+# cp -f mas.pdf ~/httpd/html/library/mas.pdf
+# chmod oug+r ~/httpd/html/library/mas.pdf
